@@ -1,0 +1,45 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: question-service
+
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/interview_coach}
+    username: ${DATABASE_USERNAME:postgres}
+    password: ${DATABASE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    show-sql: false
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+# LLM Configuration
+langchain4j:
+  anthropic:
+    api-key: ${CLAUDE_API_KEY}
+    model-name: claude-3-sonnet-20240229
+
+  openai:
+    api-key: ${OPENAI_API_KEY}
+    model-name: gpt-4-turbo-preview
+
+  chroma:
+    base-url: http://${CHROMA_HOST:localhost}:${CHROMA_PORT:8000}
+    collection-name: interview-questions
+
+logging:
+  level:
+    com.interviewcoach: DEBUG
+    dev.langchain4j: DEBUG
