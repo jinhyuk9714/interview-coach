@@ -10,4 +10,8 @@ dependencies {
 
     // SSE (WebFlux for streaming)
     implementation 'org.springframework.boot:spring-boot-starter-webflux'
+
+    // LangChain4j for LLM integration
+    implementation 'dev.langchain4j:langchain4j:0.35.0'
+    implementation 'dev.langchain4j:langchain4j-anthropic:0.35.0'
 }

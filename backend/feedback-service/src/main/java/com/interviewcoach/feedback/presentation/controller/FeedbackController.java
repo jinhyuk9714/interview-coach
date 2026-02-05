@@ -16,7 +16,9 @@ public class FeedbackController {
     @GetMapping(value = "/session/{sessionId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamFeedback(
             @PathVariable Long sessionId,
-            @RequestParam(required = false) Long qnaId) {
-        return feedbackService.streamFeedback(sessionId, qnaId);
+            @RequestParam(required = false) Long qnaId,
+            @RequestParam(required = false) String question,
+            @RequestParam(required = false) String answer) {
+        return feedbackService.streamFeedback(sessionId, qnaId, question, answer);
     }
 }

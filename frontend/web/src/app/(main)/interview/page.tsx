@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { motion } from 'motion/react';
 import { Button, Card, Textarea, Tag, ScoreRing } from '@/components/ui';
 import { useInterviewStore } from '@/stores/interview';
-// import { interviewApi, feedbackApi } from '@/lib/api';
+import { useAuthStore } from '@/stores/auth';
+import { interviewApi, feedbackApi, questionApi } from '@/lib/api';
 import {
   Brain,
   Send,
@@ -15,59 +17,16 @@ import {
   Play,
   ArrowRight,
   RotateCcw,
-  MessageSquare
+  MessageSquare,
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
-import type { InterviewQna, QnaFeedback } from '@/types';
-
-// Mock interview session for demo
-const mockSession = {
-  id: 1,
-  userId: 1,
-  jdId: 1,
-  interviewType: 'mixed' as const,
-  status: 'in_progress' as const,
-  totalQuestions: 5,
-  startedAt: new Date().toISOString(),
-  qnaList: [
-    {
-      id: 1,
-      sessionId: 1,
-      questionOrder: 1,
-      questionType: 'technical' as const,
-      questionText: 'Java의 가비지 컬렉션(GC) 동작 원리와 G1 GC의 특징을 설명해주세요.',
-    },
-    {
-      id: 2,
-      sessionId: 1,
-      questionOrder: 2,
-      questionType: 'technical' as const,
-      questionText: 'Spring의 @Transactional 어노테이션의 propagation 옵션들에 대해 설명해주세요.',
-    },
-    {
-      id: 3,
-      sessionId: 1,
-      questionOrder: 3,
-      questionType: 'technical' as const,
-      questionText: 'JPA N+1 문제가 무엇이며, 어떻게 해결할 수 있나요?',
-    },
-    {
-      id: 4,
-      sessionId: 1,
-      questionOrder: 4,
-      questionType: 'behavioral' as const,
-      questionText: '팀 내에서 기술적인 의견 충돌이 있었을 때 어떻게 해결하셨나요?',
-    },
-    {
-      id: 5,
-      sessionId: 1,
-      questionOrder: 5,
-      questionType: 'technical' as const,
-      questionText: '마이크로서비스 아키텍처에서 서비스 간 통신 방식을 설명해주세요.',
-    },
-  ],
-};
+import type { InterviewQna, QnaFeedback, GeneratedQuestion } from '@/types';
 
 export default function InterviewPage() {
+  const searchParams = useSearchParams();
+  const jdId = searchParams.get('jdId');
+
   const {
     session,
     setSession,
@@ -78,7 +37,6 @@ export default function InterviewPage() {
     setSubmitting,
     streamingFeedback,
     setStreamingFeedback,
-    appendStreamingFeedback,
     isStreaming,
     setIsStreaming,
   } = useInterviewStore();
@@ -89,93 +47,155 @@ export default function InterviewPage() {
   const [isStarted, setIsStarted] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
   const [results, setResults] = useState<{ qna: InterviewQna; feedback: QnaFeedback }[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [availableQuestions, setAvailableQuestions] = useState<GeneratedQuestion[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
 
-  // Start interview with mock data for demo
+  // Load questions for the JD
   useEffect(() => {
-    if (!session && isStarted) {
-      setSession(mockSession as unknown as typeof session);
-    }
-  }, [isStarted, session, setSession]);
+    const loadQuestions = async () => {
+      if (jdId) {
+        try {
+          const response = await questionApi.listByJd(parseInt(jdId));
+          setAvailableQuestions(response.data || []);
+        } catch (err) {
+          console.error('Failed to load questions:', err);
+        }
+      }
+    };
+    loadQuestions();
+  }, [jdId]);
 
   const currentQna = session?.qnaList?.[currentQuestionIndex];
 
-  const handleStart = () => {
-    setIsStarted(true);
-  };
+  const handleStart = useCallback(async () => {
+    if (!jdId) {
+      setError('JD를 선택해주세요.');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const questions = availableQuestions.slice(0, 5).map(q => ({
+        questionType: q.questionType,
+        questionText: q.questionText,
+      }));
+
+      if (questions.length === 0) {
+        setError('면접 질문이 없습니다. JD 분석 후 질문을 생성해주세요.');
+        setIsLoading(false);
+        return;
+      }
+
+      const response = await interviewApi.start({
+        jdId: parseInt(jdId),
+        questions,
+        interviewType: 'mixed',
+      });
+
+      setSession(response.data);
+      setIsStarted(true);
+    } catch (err) {
+      console.error('Failed to start interview:', err);
+      setError('면접 시작에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [jdId, availableQuestions, setSession]);
 
   const handleSubmitAnswer = async () => {
-    if (!answer.trim() || !currentQna) return;
+    if (!answer.trim() || !currentQna || !session) return;
 
     setSubmitting(true);
     setShowFeedback(true);
     setStreamingFeedback('');
     setIsStreaming(true);
+    setError(null);
 
     try {
-      // In production, this would call the actual API
-      // const response = await interviewApi.submitAnswer(session!.id, {
-      //   qnaId: currentQna.id,
-      //   answer: answer,
-      // });
+      // Submit the answer
+      await interviewApi.submitAnswer(session.id, {
+        questionOrder: currentQuestionIndex + 1,
+        answerText: answer,
+      });
 
-      // Mock streaming feedback
-      const mockFeedbackText = `
-답변에서 핵심 개념을 잘 파악하고 계십니다.
+      // Connect to SSE for streaming feedback (pass token as query param since EventSource doesn't support headers)
+      const token = useAuthStore.getState().accessToken;
+      const streamUrl = feedbackApi.streamUrl(session.id, {
+        token: token || undefined,
+        question: currentQna?.questionText,
+        answer: answer,
+      });
+      const eventSource = new EventSource(streamUrl);
+      eventSourceRef.current = eventSource;
 
-**강점:**
-• 기본 개념을 정확하게 이해하고 있습니다
-• 실제 사례를 들어 설명하려는 시도가 좋습니다
-• 논리적인 구조로 답변을 전개했습니다
+      let feedbackData: QnaFeedback | null = null;
 
-**개선점:**
-• 좀 더 구체적인 예시를 추가하면 좋겠습니다
-• 성능 관점에서의 trade-off를 언급하면 더 좋습니다
-• 실무 경험을 더 연결 지어 설명해보세요
-
-**팁:**
-실제 면접에서는 "저희 프로젝트에서는..." 이런 식으로 실무 경험과 연결 지으면 면접관에게 더 좋은 인상을 줄 수 있습니다.
-      `.trim();
-
-      // Simulate streaming
-      let currentIndex = 0;
-      const streamInterval = setInterval(() => {
-        if (currentIndex < mockFeedbackText.length) {
-          appendStreamingFeedback(mockFeedbackText[currentIndex]);
-          currentIndex++;
-        } else {
-          clearInterval(streamInterval);
-          setIsStreaming(false);
-
-          // Set final feedback
-          const mockFeedback: QnaFeedback = {
-            score: Math.floor(Math.random() * 30) + 60, // 60-90
-            strengths: [
-              '기본 개념을 정확하게 이해하고 있습니다',
-              '실제 사례를 들어 설명하려는 시도가 좋습니다',
-            ],
-            improvements: [
-              '좀 더 구체적인 예시를 추가하면 좋겠습니다',
-              '성능 관점에서의 trade-off를 언급하면 더 좋습니다',
-            ],
-            tips: [
-              '실무 경험과 연결 지어 설명하세요',
-            ],
-          };
-
-          setFeedback(mockFeedback);
-          setResults((prev) => [...prev, { qna: currentQna, feedback: mockFeedback }]);
+      // Handle 'feedback' event from backend
+      eventSource.addEventListener('feedback', (event: MessageEvent) => {
+        const data = JSON.parse(event.data);
+        feedbackData = {
+          score: data.score || 75,
+          strengths: data.strengths || [],
+          improvements: data.improvements || [],
+          tips: data.tips ? [data.tips] : [],
+        };
+        // Display overall comment as streaming feedback
+        if (data.overallComment) {
+          setStreamingFeedback(data.overallComment);
         }
-      }, 20);
+      });
 
-    } catch (error) {
-      console.error('Submit answer error:', error);
+      // Handle 'complete' event from backend
+      eventSource.addEventListener('complete', () => {
+        eventSource.close();
+        setIsStreaming(false);
+        if (feedbackData) {
+          setFeedback(feedbackData);
+          setResults((prev) => [...prev, { qna: currentQna, feedback: feedbackData! }]);
+        }
+      });
+
+      eventSource.onerror = () => {
+        eventSource.close();
+        setIsStreaming(false);
+        // If we didn't get feedback from SSE, create a placeholder
+        if (!feedbackData) {
+          feedbackData = {
+            score: 70,
+            strengths: ['답변이 제출되었습니다'],
+            improvements: ['피드백을 불러오는 중 오류가 발생했습니다'],
+            tips: [],
+          };
+          setFeedback(feedbackData);
+          setResults((prev) => [...prev, { qna: currentQna, feedback: feedbackData! }]);
+        }
+      };
+
+    } catch (err) {
+      console.error('Submit answer error:', err);
+      setError('답변 제출에 실패했습니다. 다시 시도해주세요.');
+      setShowFeedback(false);
+      setIsStreaming(false);
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleNext = () => {
+  // Cleanup event source on unmount
+  useEffect(() => {
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
+    };
+  }, []);
+
+  const handleNext = async () => {
     if (currentQuestionIndex < (session?.totalQuestions || 0) - 1) {
       nextQuestion();
       setAnswer('');
@@ -183,6 +203,14 @@ export default function InterviewPage() {
       setShowFeedback(false);
       setStreamingFeedback('');
     } else {
+      // Complete the interview
+      if (session) {
+        try {
+          await interviewApi.complete(session.id);
+        } catch (err) {
+          console.error('Failed to complete interview:', err);
+        }
+      }
       setIsCompleted(true);
     }
   };
@@ -195,7 +223,9 @@ export default function InterviewPage() {
     setAnswer('');
     setFeedback(null);
     setShowFeedback(false);
+    setStreamingFeedback('');
     setResults([]);
+    setError(null);
   };
 
   // Start screen
@@ -227,7 +257,9 @@ export default function InterviewPage() {
 
               <div className="grid grid-cols-3 gap-4 max-w-lg mx-auto mb-8">
                 <div className="p-4 bg-cream border-2 border-ink">
-                  <div className="text-2xl font-display mb-1">5</div>
+                  <div className="text-2xl font-display mb-1">
+                    {availableQuestions.length > 0 ? Math.min(availableQuestions.length, 5) : 5}
+                  </div>
                   <div className="text-xs text-neutral-500 uppercase">질문</div>
                 </div>
                 <div className="p-4 bg-cream border-2 border-ink">
@@ -240,12 +272,27 @@ export default function InterviewPage() {
                 </div>
               </div>
 
+              {error && (
+                <div className="mb-6 p-4 bg-accent-coral/10 border-2 border-accent-coral flex items-center gap-3 max-w-md mx-auto">
+                  <AlertCircle className="w-5 h-5 text-accent-coral shrink-0" />
+                  <p className="text-sm text-accent-coral">{error}</p>
+                </div>
+              )}
+
+              {!jdId && (
+                <div className="mb-6 p-4 bg-accent-blue/10 border-2 border-accent-blue flex items-center gap-3 max-w-md mx-auto">
+                  <AlertCircle className="w-5 h-5 text-accent-blue shrink-0" />
+                  <p className="text-sm text-accent-blue">JD 분석 페이지에서 질문을 생성한 후 면접을 시작해주세요.</p>
+                </div>
+              )}
+
               <Button
                 size="lg"
                 onClick={handleStart}
-                leftIcon={<Play className="w-5 h-5" />}
+                leftIcon={isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5" />}
+                disabled={isLoading || !jdId || availableQuestions.length === 0}
               >
-                면접 시작하기
+                {isLoading ? '면접 준비 중...' : '면접 시작하기'}
               </Button>
             </Card>
           </motion.div>

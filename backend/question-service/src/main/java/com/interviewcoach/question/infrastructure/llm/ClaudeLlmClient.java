@@ -130,7 +130,7 @@ public class ClaudeLlmClient implements LlmClient {
 
     private JdAnalysisResult parseAnalysisResponse(String response) {
         try {
-            String json = extractJson(response);
+            String json = extractJsonObject(response);
             Map<String, Object> result = objectMapper.readValue(json, new TypeReference<>() {});
 
             @SuppressWarnings("unchecked")
@@ -148,7 +148,7 @@ public class ClaudeLlmClient implements LlmClient {
 
     private List<GeneratedQuestionResult> parseQuestionsResponse(String response) {
         try {
-            String json = extractJson(response);
+            String json = extractJsonArray(response);
             List<Map<String, Object>> questions = objectMapper.readValue(json, new TypeReference<>() {});
 
             return questions.stream()
@@ -168,12 +168,40 @@ public class ClaudeLlmClient implements LlmClient {
     }
 
     private String extractJson(String response) {
+        // Try to find JSON object first
+        int objStart = response.indexOf('{');
+        int objEnd = response.lastIndexOf('}');
+
+        // Try to find JSON array
+        int arrStart = response.indexOf('[');
+        int arrEnd = response.lastIndexOf(']');
+
+        // Determine which comes first and is valid
+        if (objStart != -1 && objEnd != -1 && objEnd > objStart) {
+            if (arrStart == -1 || objStart < arrStart) {
+                return response.substring(objStart, objEnd + 1);
+            }
+        }
+
+        if (arrStart != -1 && arrEnd != -1 && arrEnd > arrStart) {
+            return response.substring(arrStart, arrEnd + 1);
+        }
+
+        return response;
+    }
+
+    private String extractJsonObject(String response) {
+        int start = response.indexOf('{');
+        int end = response.lastIndexOf('}');
+        if (start != -1 && end != -1 && end > start) {
+            return response.substring(start, end + 1);
+        }
+        return response;
+    }
+
+    private String extractJsonArray(String response) {
         int start = response.indexOf('[');
         int end = response.lastIndexOf(']');
-        if (start == -1 || end == -1) {
-            start = response.indexOf('{');
-            end = response.lastIndexOf('}');
-        }
         if (start != -1 && end != -1 && end > start) {
             return response.substring(start, end + 1);
         }

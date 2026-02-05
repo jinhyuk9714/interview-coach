@@ -92,14 +92,14 @@ export const questionApi = {
 
 // Interview API
 export const interviewApi = {
-  start: (data: { jdId: number; questionIds: number[]; interviewType: string }) =>
+  start: (data: { jdId: number; questions: Array<{ questionType: string; questionText: string }>; interviewType: string }) =>
     api.post('/api/v1/interviews', data),
 
   list: () => api.get('/api/v1/interviews'),
 
   get: (id: number) => api.get(`/api/v1/interviews/${id}`),
 
-  submitAnswer: (id: number, data: { qnaId: number; answer: string }) =>
+  submitAnswer: (id: number, data: { questionOrder: number; answerText: string }) =>
     api.post(`/api/v1/interviews/${id}/answer`, data),
 
   complete: (id: number) => api.post(`/api/v1/interviews/${id}/complete`),
@@ -107,7 +107,14 @@ export const interviewApi = {
 
 // Feedback API
 export const feedbackApi = {
-  streamUrl: (sessionId: number) => `${API_BASE_URL}/api/v1/feedback/session/${sessionId}/stream`,
+  streamUrl: (sessionId: number, options?: { token?: string; question?: string; answer?: string }) => {
+    const params = new URLSearchParams();
+    if (options?.token) params.append('token', options.token);
+    if (options?.question) params.append('question', options.question);
+    if (options?.answer) params.append('answer', options.answer);
+    const queryString = params.toString();
+    return `${API_BASE_URL}/api/v1/feedback/session/${sessionId}/stream${queryString ? `?${queryString}` : ''}`;
+  },
 };
 
 // Statistics API

@@ -31,15 +31,15 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
 
-# LLM Configuration (for feedback generation)
+# LLM Configuration (for feedback generation) - empty string = mock mode
 langchain4j:
   anthropic:
-    api-key: ${CLAUDE_API_KEY}
-    model-name: claude-3-sonnet-20240229
+    api-key: ${CLAUDE_API_KEY:}
+    model-name: claude-sonnet-4-20250514
     streaming: true
 
   openai:
-    api-key: ${OPENAI_API_KEY}
+    api-key: ${OPENAI_API_KEY:}
     model-name: gpt-4-turbo-preview
 
 logging:

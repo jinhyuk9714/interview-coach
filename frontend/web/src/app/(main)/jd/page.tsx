@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button, Card, Input, Textarea, Tag } from '@/components/ui';
@@ -16,36 +16,15 @@ import {
   Loader2,
   Check,
   ArrowRight,
-  X
+  X,
+  AlertCircle
 } from 'lucide-react';
 import type { JobDescription, JdAnalysis, GeneratedQuestion } from '@/types';
 
-// Mock data for demo
-const mockJdList: JobDescription[] = [
-  {
-    id: 1,
-    userId: 1,
-    companyName: '카카오',
-    position: '백엔드 개발자',
-    originalText: 'Java, Spring Boot 기반 백엔드 개발 경력 3년 이상...',
-    parsedSkills: ['Java', 'Spring Boot', 'JPA', 'MySQL', 'Redis'],
-    parsedRequirements: ['3년 이상 경력', 'MSA 경험', 'AWS 경험'],
-    createdAt: '2024-01-15T10:00:00Z',
-  },
-  {
-    id: 2,
-    userId: 1,
-    companyName: '네이버',
-    position: 'Java 개발자',
-    originalText: '대규모 트래픽 처리 경험...',
-    parsedSkills: ['Java', 'Spring', 'Kafka', 'Kubernetes'],
-    parsedRequirements: ['5년 이상 경력', '대용량 트래픽 경험'],
-    createdAt: '2024-01-14T09:00:00Z',
-  },
-];
-
 export default function JdPage() {
-  const [jdList, setJdList] = useState<JobDescription[]>(mockJdList);
+  const [jdList, setJdList] = useState<JobDescription[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedJd, setSelectedJd] = useState<JobDescription | null>(null);
   const [analysis, setAnalysis] = useState<JdAnalysis | null>(null);
@@ -59,28 +38,42 @@ export default function JdPage() {
     originalText: '',
     originalUrl: '',
   });
+  const [isCreating, setIsCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  // Load JD list on mount
+  useEffect(() => {
+    const fetchJdList = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const response = await jdApi.list();
+        setJdList(response.data || []);
+      } catch (err) {
+        console.error('Failed to fetch JD list:', err);
+        setError('JD 목록을 불러오는데 실패했습니다.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchJdList();
+  }, []);
 
   const handleCreateJd = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsCreating(true);
+    setCreateError(null);
 
     try {
       const response = await jdApi.create(newJd);
       setJdList([response.data, ...jdList]);
       setShowCreateModal(false);
       setNewJd({ companyName: '', position: '', originalText: '', originalUrl: '' });
-    } catch {
-      // Mock: add to local state
-      const mockJd: JobDescription = {
-        id: Date.now(),
-        userId: 1,
-        ...newJd,
-        parsedSkills: [],
-        parsedRequirements: [],
-        createdAt: new Date().toISOString(),
-      };
-      setJdList([mockJd, ...jdList]);
-      setShowCreateModal(false);
-      setNewJd({ companyName: '', position: '', originalText: '', originalUrl: '' });
+    } catch (err) {
+      console.error('Failed to create JD:', err);
+      setCreateError('JD 등록에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -93,14 +86,19 @@ export default function JdPage() {
     try {
       const response = await jdApi.analyze(jd.id);
       setAnalysis(response.data);
-    } catch {
-      // Mock analysis
-      setAnalysis({
-        jdId: jd.id,
-        skills: jd.parsedSkills.length > 0 ? jd.parsedSkills : ['Java', 'Spring Boot', 'JPA', 'MySQL'],
-        requirements: jd.parsedRequirements.length > 0 ? jd.parsedRequirements : ['3년 이상 경력', '협업 능력'],
-        summary: `${jd.companyName}의 ${jd.position} 포지션은 백엔드 개발 역량과 시스템 설계 능력을 요구합니다.`,
-      });
+    } catch (err) {
+      console.error('Failed to analyze JD:', err);
+      // Use existing parsed data if available
+      if (jd.parsedSkills?.length > 0 || jd.parsedRequirements?.length > 0) {
+        setAnalysis({
+          jdId: jd.id,
+          skills: jd.parsedSkills || [],
+          requirements: jd.parsedRequirements || [],
+          summary: `${jd.companyName}의 ${jd.position} 포지션입니다.`,
+        });
+      } else {
+        setError('JD 분석에 실패했습니다. 다시 시도해주세요.');
+      }
     } finally {
       setIsAnalyzing(false);
     }
@@ -110,6 +108,7 @@ export default function JdPage() {
     if (!selectedJd) return;
 
     setIsGenerating(true);
+    setError(null);
 
     try {
       const response = await questionApi.generate({
@@ -119,59 +118,9 @@ export default function JdPage() {
         difficulty: 3,
       });
       setQuestions(response.data.questions || response.data);
-    } catch {
-      // Mock questions
-      setQuestions([
-        {
-          id: 1,
-          jdId: selectedJd.id,
-          questionType: 'technical',
-          skillCategory: 'Java',
-          questionText: 'Java의 가비지 컬렉션(GC) 동작 원리와 G1 GC의 특징을 설명해주세요.',
-          hint: 'Young Generation, Old Generation, Mark-Sweep-Compact',
-          difficulty: 3,
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: 2,
-          jdId: selectedJd.id,
-          questionType: 'technical',
-          skillCategory: 'Spring',
-          questionText: 'Spring의 @Transactional 어노테이션의 propagation 옵션들에 대해 설명해주세요.',
-          hint: 'REQUIRED, REQUIRES_NEW, NESTED 등',
-          difficulty: 4,
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: 3,
-          jdId: selectedJd.id,
-          questionType: 'technical',
-          skillCategory: 'JPA',
-          questionText: 'JPA N+1 문제가 무엇이며, 어떻게 해결할 수 있나요?',
-          hint: 'Fetch Join, @BatchSize, @EntityGraph',
-          difficulty: 3,
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: 4,
-          jdId: selectedJd.id,
-          questionType: 'behavioral',
-          skillCategory: '협업',
-          questionText: '팀 내에서 의견 충돌이 있었을 때 어떻게 해결하셨나요?',
-          difficulty: 2,
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: 5,
-          jdId: selectedJd.id,
-          questionType: 'technical',
-          skillCategory: 'Database',
-          questionText: '인덱스의 동작 원리와 B+Tree 구조에 대해 설명해주세요.',
-          hint: 'Clustered Index, Non-Clustered Index',
-          difficulty: 4,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
+    } catch (err) {
+      console.error('Failed to generate questions:', err);
+      setError('질문 생성에 실패했습니다. 다시 시도해주세요.');
     } finally {
       setIsGenerating(false);
     }
@@ -200,6 +149,24 @@ export default function JdPage() {
           </Button>
         </motion.div>
 
+        {/* Error Alert */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 bg-accent-coral/10 border-2 border-accent-coral flex items-center gap-3"
+          >
+            <AlertCircle className="w-5 h-5 text-accent-coral shrink-0" />
+            <p className="text-sm text-accent-coral">{error}</p>
+            <button
+              onClick={() => setError(null)}
+              className="ml-auto p-1 hover:bg-accent-coral/20 rounded"
+            >
+              <X className="w-4 h-4 text-accent-coral" />
+            </button>
+          </motion.div>
+        )}
+
         <div className="grid lg:grid-cols-3 gap-8">
           {/* JD List */}
           <motion.div
@@ -216,36 +183,56 @@ export default function JdPage() {
                 </h2>
               </div>
               <div className="divide-y-2 divide-neutral-100 max-h-[600px] overflow-y-auto">
-                {jdList.map((jd) => (
-                  <motion.button
-                    key={jd.id}
-                    onClick={() => handleAnalyze(jd)}
-                    className={`w-full p-4 text-left transition-colors ${
-                      selectedJd?.id === jd.id
-                        ? 'bg-accent-lime/20'
-                        : 'hover:bg-neutral-50'
-                    }`}
-                    whileHover={{ x: 4 }}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="font-sans font-semibold">{jd.companyName}</h3>
-                        <p className="text-sm text-neutral-500">{jd.position}</p>
-                        {jd.parsedSkills.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-2">
-                            {jd.parsedSkills.slice(0, 3).map((skill) => (
-                              <Tag key={skill} size="sm">{skill}</Tag>
-                            ))}
-                            {jd.parsedSkills.length > 3 && (
-                              <Tag size="sm" variant="default">+{jd.parsedSkills.length - 3}</Tag>
-                            )}
-                          </div>
-                        )}
+                {isLoading ? (
+                  <div className="p-8 text-center">
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto text-neutral-400" />
+                    <p className="text-sm text-neutral-500 mt-2">불러오는 중...</p>
+                  </div>
+                ) : jdList.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <FileText className="w-8 h-8 mx-auto text-neutral-300 mb-2" />
+                    <p className="text-sm text-neutral-500">등록된 JD가 없습니다</p>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="mt-2"
+                      onClick={() => setShowCreateModal(true)}
+                    >
+                      새 JD 등록하기
+                    </Button>
+                  </div>
+                ) : (
+                  jdList.map((jd) => (
+                    <motion.button
+                      key={jd.id}
+                      onClick={() => handleAnalyze(jd)}
+                      className={`w-full p-4 text-left transition-colors ${
+                        selectedJd?.id === jd.id
+                          ? 'bg-accent-lime/20'
+                          : 'hover:bg-neutral-50'
+                      }`}
+                      whileHover={{ x: 4 }}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h3 className="font-sans font-semibold">{jd.companyName}</h3>
+                          <p className="text-sm text-neutral-500">{jd.position}</p>
+                          {jd.parsedSkills && jd.parsedSkills.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {jd.parsedSkills.slice(0, 3).map((skill) => (
+                                <Tag key={skill} size="sm">{skill}</Tag>
+                              ))}
+                              {jd.parsedSkills.length > 3 && (
+                                <Tag size="sm" variant="default">+{jd.parsedSkills.length - 3}</Tag>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-neutral-400" />
                       </div>
-                      <ChevronRight className="w-5 h-5 text-neutral-400" />
-                    </div>
-                  </motion.button>
-                ))}
+                    </motion.button>
+                  ))
+                )}
               </div>
             </Card>
           </motion.div>
@@ -480,15 +467,22 @@ export default function JdPage() {
                     required
                   />
 
+                  {createError && (
+                    <div className="p-3 bg-accent-coral/10 border border-accent-coral text-sm text-accent-coral">
+                      {createError}
+                    </div>
+                  )}
+
                   <div className="flex gap-3 justify-end">
                     <Button
                       type="button"
                       variant="secondary"
                       onClick={() => setShowCreateModal(false)}
+                      disabled={isCreating}
                     >
                       취소
                     </Button>
-                    <Button type="submit">
+                    <Button type="submit" isLoading={isCreating}>
                       등록하기
                     </Button>
                   </div>
