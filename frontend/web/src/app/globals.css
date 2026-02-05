@@ -1,0 +1,289 @@
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: 'Instrument Serif', serif;
+  --font-sans: 'Syne', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --color-ink: #0D0D0D;
+  --color-paper: #F5F2EB;
+  --color-cream: #FAF8F3;
+  --color-lime: #BFFF00;
+  --color-coral: #FF6B4A;
+  --color-blue: #2E5CFF;
+  --color-purple: #8B5CF6;
+}
+
+@layer base {
+  * {
+    @apply box-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-paper text-ink font-sans;
+    font-feature-settings: "ss01" on, "ss02" on;
+  }
+
+  ::selection {
+    @apply bg-accent-lime text-ink;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+    text-wrap: balance;
+  }
+}
+
+@layer components {
+  /* Neo-brutalist card */
+  .card-brutal {
+    @apply bg-white border-2 border-ink shadow-brutal;
+    @apply transition-all duration-200 ease-out;
+  }
+
+  .card-brutal:hover {
+    @apply shadow-brutal-lg;
+    transform: translate(-2px, -2px);
+  }
+
+  /* Button styles */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2;
+    @apply px-6 py-3 font-sans font-semibold text-sm uppercase tracking-wide;
+    @apply bg-ink text-paper border-2 border-ink;
+    @apply shadow-brutal transition-all duration-150;
+  }
+
+  .btn-primary:hover {
+    @apply bg-accent-lime text-ink;
+    transform: translate(-2px, -2px);
+    @apply shadow-brutal-lg;
+  }
+
+  .btn-primary:active {
+    transform: translate(0, 0);
+    @apply shadow-none;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2;
+    @apply px-6 py-3 font-sans font-semibold text-sm uppercase tracking-wide;
+    @apply bg-paper text-ink border-2 border-ink;
+    @apply transition-all duration-150;
+  }
+
+  .btn-secondary:hover {
+    @apply bg-cream;
+  }
+
+  .btn-accent {
+    @apply inline-flex items-center justify-center gap-2;
+    @apply px-6 py-3 font-sans font-bold text-sm uppercase tracking-wide;
+    @apply bg-accent-coral text-white border-2 border-ink;
+    @apply shadow-brutal transition-all duration-150;
+  }
+
+  .btn-accent:hover {
+    @apply bg-accent-lime text-ink;
+    transform: translate(-2px, -2px);
+    @apply shadow-brutal-lg;
+  }
+
+  /* Input styles */
+  .input-brutal {
+    @apply w-full px-4 py-3 font-sans text-base;
+    @apply bg-white border-2 border-ink;
+    @apply shadow-brutal-sm transition-all duration-150;
+    @apply placeholder:text-neutral-400;
+    @apply focus:outline-none focus:shadow-brutal focus:border-accent-blue;
+  }
+
+  .textarea-brutal {
+    @apply w-full px-4 py-3 font-sans text-base resize-none;
+    @apply bg-white border-2 border-ink;
+    @apply shadow-brutal-sm transition-all duration-150;
+    @apply placeholder:text-neutral-400;
+    @apply focus:outline-none focus:shadow-brutal focus:border-accent-blue;
+  }
+
+  /* Tag/badge styles */
+  .tag {
+    @apply inline-flex items-center px-3 py-1;
+    @apply font-mono text-xs uppercase tracking-wider;
+    @apply border-2 border-ink bg-white;
+  }
+
+  .tag-lime {
+    @apply bg-accent-lime text-ink;
+  }
+
+  .tag-coral {
+    @apply bg-accent-coral text-white;
+  }
+
+  .tag-blue {
+    @apply bg-accent-blue text-white;
+  }
+
+  /* Divider */
+  .divider {
+    @apply w-full h-0.5 bg-ink;
+  }
+
+  .divider-dashed {
+    @apply w-full border-t-2 border-dashed border-ink;
+  }
+
+  /* Grid overlay for design */
+  .grid-overlay {
+    @apply fixed inset-0 pointer-events-none z-50;
+    background-image:
+      linear-gradient(to right, rgba(13, 13, 13, 0.03) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(13, 13, 13, 0.03) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  /* Noise texture overlay */
+  .noise-overlay {
+    @apply fixed inset-0 pointer-events-none z-40 opacity-[0.015];
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  }
+
+  /* Typewriter effect */
+  .typewriter-cursor::after {
+    content: '|';
+    @apply animate-blink text-accent-coral;
+  }
+
+  /* Score indicator */
+  .score-ring {
+    @apply relative w-20 h-20;
+  }
+
+  .score-ring svg {
+    @apply w-full h-full -rotate-90;
+  }
+
+  .score-ring .track {
+    @apply fill-none stroke-neutral-200;
+    stroke-width: 8;
+  }
+
+  .score-ring .progress {
+    @apply fill-none;
+    stroke-width: 8;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1s ease-out;
+  }
+
+  /* Marquee */
+  .marquee-container {
+    @apply overflow-hidden whitespace-nowrap;
+  }
+
+  .marquee-content {
+    @apply inline-flex animate-marquee;
+  }
+
+  /* Stagger animations */
+  .stagger-1 { animation-delay: 0.1s; }
+  .stagger-2 { animation-delay: 0.2s; }
+  .stagger-3 { animation-delay: 0.3s; }
+  .stagger-4 { animation-delay: 0.4s; }
+  .stagger-5 { animation-delay: 0.5s; }
+  .stagger-6 { animation-delay: 0.6s; }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, var(--color-coral) 0%, var(--color-purple) 100%);
+  }
+
+  /* Scroll snap */
+  .snap-x-mandatory {
+    scroll-snap-type: x mandatory;
+  }
+
+  .snap-start {
+    scroll-snap-align: start;
+  }
+
+  /* Custom scrollbar */
+  .scrollbar-thin::-webkit-scrollbar {
+    @apply w-2 h-2;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    @apply bg-neutral-100;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-ink rounded-full;
+  }
+
+  /* Focus visible */
+  .focus-ring {
+    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-blue focus-visible:ring-offset-2;
+  }
+}
+
+/* Custom animations for specific elements */
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient-shift 8s ease infinite;
+}
+
+/* Interview chat bubble animations */
+@keyframes bubble-in {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.bubble-animate {
+  animation: bubble-in 0.3s ease-out forwards;
+}
+
+/* Progress bar animation */
+@keyframes progress-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(var(--progress, 0));
+  }
+}
+
+.progress-bar {
+  transform-origin: left;
+  animation: progress-fill 1s ease-out forwards;
+}
