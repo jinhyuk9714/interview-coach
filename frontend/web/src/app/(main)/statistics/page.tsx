@@ -1,7 +1,9 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Card, ScoreRing } from '@/components/ui';
+import { statisticsApi, interviewApi } from '@/lib/api';
 import {
   TrendingUp,
   TrendingDown,
@@ -11,59 +13,156 @@ import {
   BookOpen,
   Zap,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Loader2
 } from 'lucide-react';
 
-// Mock statistics data
-const overallStats = {
-  totalInterviews: 24,
-  totalQuestions: 156,
-  avgScore: 78,
-  scoreTrend: +5,
-  streakDays: 7,
-  rank: 'A',
-};
+interface OverallStats {
+  totalInterviews: number;
+  totalQuestions: number;
+  avgScore: number;
+  scoreTrend: number;
+  streakDays: number;
+  rank: string;
+}
 
-const categoryStats = [
-  { category: 'Java', score: 85, total: 32, trend: +8, color: 'bg-accent-lime' },
-  { category: 'Spring', score: 72, total: 28, trend: -3, color: 'bg-accent-coral' },
-  { category: 'JPA', score: 58, total: 24, trend: +12, color: 'bg-accent-blue' },
-  { category: 'Database', score: 65, total: 20, trend: +5, color: 'bg-accent-purple' },
-  { category: 'Network', score: 70, total: 18, trend: 0, color: 'bg-neutral-400' },
-  { category: '인성', score: 82, total: 34, trend: +2, color: 'bg-accent-coral' },
-];
+interface CategoryStat {
+  category: string;
+  score: number;
+  total: number;
+  trend: number;
+  color: string;
+}
 
-const weeklyActivity = [
-  { day: '월', count: 3, score: 75 },
-  { day: '화', count: 5, score: 82 },
-  { day: '수', count: 2, score: 68 },
-  { day: '목', count: 4, score: 79 },
-  { day: '금', count: 6, score: 85 },
-  { day: '토', count: 1, score: 72 },
-  { day: '일', count: 3, score: 80 },
-];
+interface WeakPoint {
+  skill: string;
+  score: number;
+  suggestion: string;
+}
 
-const recentProgress = [
-  { date: '1주차', score: 62 },
-  { date: '2주차', score: 68 },
-  { date: '3주차', score: 71 },
-  { date: '4주차', score: 78 },
-];
+interface Achievement {
+  icon: typeof Zap;
+  title: string;
+  description: string;
+  unlocked: boolean;
+}
 
-const weakPoints = [
-  { skill: 'JPA N+1 문제', score: 45, suggestion: 'Fetch Join 복습 권장' },
-  { skill: '트랜잭션 격리수준', score: 52, suggestion: 'ACID 원리 복습' },
-  { skill: 'Redis 캐싱 전략', score: 58, suggestion: 'Cache-Aside 패턴 학습' },
-];
-
-const achievements = [
-  { icon: Zap, title: '첫 면접', description: '첫 모의 면접 완료', unlocked: true },
-  { icon: Target, title: '10연속', description: '10개 연속 정답', unlocked: true },
+const defaultAchievements: Achievement[] = [
+  { icon: Zap, title: '첫 면접', description: '첫 모의 면접 완료', unlocked: false },
+  { icon: Target, title: '10연속', description: '10개 연속 정답', unlocked: false },
   { icon: Award, title: '90점 달성', description: '평균 90점 이상', unlocked: false },
-  { icon: BookOpen, title: '전문가', description: '100개 질문 완료', unlocked: true },
+  { icon: BookOpen, title: '전문가', description: '100개 질문 완료', unlocked: false },
+];
+
+const categoryColors = [
+  'bg-accent-lime',
+  'bg-accent-coral',
+  'bg-accent-blue',
+  'bg-accent-purple',
+  'bg-neutral-400',
 ];
 
 export default function StatisticsPage() {
+  const [isLoading, setIsLoading] = useState(true);
+  const [overallStats, setOverallStats] = useState<OverallStats>({
+    totalInterviews: 0,
+    totalQuestions: 0,
+    avgScore: 0,
+    scoreTrend: 0,
+    streakDays: 0,
+    rank: '-',
+  });
+  const [categoryStats, setCategoryStats] = useState<CategoryStat[]>([]);
+  const [weeklyActivity, setWeeklyActivity] = useState<Array<{ day: string; count: number; score: number }>>([]);
+  const [recentProgress, setRecentProgress] = useState<Array<{ date: string; score: number }>>([]);
+  const [weakPoints, setWeakPoints] = useState<WeakPoint[]>([]);
+  const [achievements, setAchievements] = useState<Achievement[]>(defaultAchievements);
+
+  useEffect(() => {
+    const fetchStatistics = async () => {
+      setIsLoading(true);
+      try {
+        const [statsRes, interviewsRes] = await Promise.allSettled([
+          statisticsApi.get(),
+          interviewApi.list(),
+        ]);
+
+        // Process overall stats
+        if (statsRes.status === 'fulfilled' && statsRes.value.data) {
+          const data = statsRes.value.data;
+          setOverallStats({
+            totalInterviews: data.totalInterviews || 0,
+            totalQuestions: data.totalQuestions || 0,
+            avgScore: data.avgScore || 0,
+            scoreTrend: data.scoreTrend || 0,
+            streakDays: data.streakDays || 0,
+            rank: data.rank || getRank(data.avgScore || 0),
+          });
+
+          if (data.categoryStats) {
+            setCategoryStats(data.categoryStats.map((cat: CategoryStat, i: number) => ({
+              ...cat,
+              color: categoryColors[i % categoryColors.length],
+            })));
+          }
+
+          if (data.weeklyActivity) {
+            setWeeklyActivity(data.weeklyActivity);
+          }
+
+          if (data.recentProgress) {
+            setRecentProgress(data.recentProgress);
+          }
+
+          if (data.weakPoints) {
+            setWeakPoints(data.weakPoints);
+          }
+
+          // Update achievements based on stats
+          const updatedAchievements = [...defaultAchievements];
+          if (data.totalInterviews >= 1) updatedAchievements[0].unlocked = true;
+          if (data.totalQuestions >= 10) updatedAchievements[1].unlocked = true;
+          if (data.avgScore >= 90) updatedAchievements[2].unlocked = true;
+          if (data.totalQuestions >= 100) updatedAchievements[3].unlocked = true;
+          setAchievements(updatedAchievements);
+        } else if (interviewsRes.status === 'fulfilled') {
+          // Fallback: calculate from interviews
+          const interviews = interviewsRes.value.data || [];
+          const completedInterviews = interviews.filter((i: { status: string }) => i.status === 'completed');
+          const totalScore = completedInterviews.reduce((acc: number, i: { score?: number }) => acc + (i.score || 0), 0);
+          const avgScore = completedInterviews.length > 0 ? Math.round(totalScore / completedInterviews.length) : 0;
+
+          setOverallStats({
+            totalInterviews: interviews.length,
+            totalQuestions: interviews.length * 5, // Approximate
+            avgScore,
+            scoreTrend: 0,
+            streakDays: 0,
+            rank: getRank(avgScore),
+          });
+
+          const updatedAchievements = [...defaultAchievements];
+          if (interviews.length >= 1) updatedAchievements[0].unlocked = true;
+          setAchievements(updatedAchievements);
+        }
+      } catch (err) {
+        console.error('Failed to fetch statistics:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchStatistics();
+  }, []);
+
+  const getRank = (score: number): string => {
+    if (score >= 90) return 'S';
+    if (score >= 80) return 'A';
+    if (score >= 70) return 'B';
+    if (score >= 60) return 'C';
+    if (score >= 50) return 'D';
+    return '-';
+  };
   return (
     <div className="py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -79,6 +178,15 @@ export default function StatisticsPage() {
           </p>
         </motion.div>
 
+        {isLoading && (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-8 h-8 animate-spin text-neutral-400" />
+            <p className="ml-3 text-neutral-500">통계를 불러오는 중...</p>
+          </div>
+        )}
+
+        {!isLoading && (
+          <>
         {/* Overview Cards */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -144,43 +252,50 @@ export default function StatisticsPage() {
                 </h2>
 
                 <div className="space-y-4">
-                  {categoryStats.map((cat, index) => (
-                    <motion.div
-                      key={cat.category}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.3 + index * 0.05 }}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-3 h-3 ${cat.color}`} />
-                          <span className="font-semibold">{cat.category}</span>
-                          <span className="text-xs text-neutral-400 font-mono">
-                            ({cat.total}문제)
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="font-mono font-bold">{cat.score}%</span>
-                          {cat.trend !== 0 && (
-                            <span className={`flex items-center text-xs ${
-                              cat.trend > 0 ? 'text-green-500' : 'text-red-500'
-                            }`}>
-                              {cat.trend > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                              {Math.abs(cat.trend)}
+                  {categoryStats.length === 0 ? (
+                    <div className="p-8 text-center text-neutral-500">
+                      <Target className="w-8 h-8 mx-auto text-neutral-300 mb-2" />
+                      <p className="text-sm">면접 기록이 쌓이면 카테고리별 통계가 표시됩니다</p>
+                    </div>
+                  ) : (
+                    categoryStats.map((cat, index) => (
+                      <motion.div
+                        key={cat.category}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.3 + index * 0.05 }}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-3 h-3 ${cat.color}`} />
+                            <span className="font-semibold">{cat.category}</span>
+                            <span className="text-xs text-neutral-400 font-mono">
+                              ({cat.total}문제)
                             </span>
-                          )}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="font-mono font-bold">{cat.score}%</span>
+                            {cat.trend !== 0 && (
+                              <span className={`flex items-center text-xs ${
+                                cat.trend > 0 ? 'text-green-500' : 'text-red-500'
+                              }`}>
+                                {cat.trend > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                                {Math.abs(cat.trend)}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      <div className="h-3 bg-neutral-100 border border-ink overflow-hidden">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          animate={{ width: `${cat.score}%` }}
-                          transition={{ delay: 0.5 + index * 0.1, duration: 0.8 }}
-                          className={`h-full ${cat.color}`}
-                        />
-                      </div>
-                    </motion.div>
-                  ))}
+                        <div className="h-3 bg-neutral-100 border border-ink overflow-hidden">
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${cat.score}%` }}
+                            transition={{ delay: 0.5 + index * 0.1, duration: 0.8 }}
+                            className={`h-full ${cat.color}`}
+                          />
+                        </div>
+                      </motion.div>
+                    ))
+                  )}
                 </div>
               </Card>
             </motion.div>
@@ -194,27 +309,36 @@ export default function StatisticsPage() {
               <Card className="p-6">
                 <h2 className="text-xl font-display mb-6">주간 활동</h2>
 
-                <div className="flex items-end justify-between h-40 gap-2">
-                  {weeklyActivity.map((day, index) => (
-                    <motion.div
-                      key={day.day}
-                      initial={{ height: 0 }}
-                      animate={{ height: `${(day.count / 6) * 100}%` }}
-                      transition={{ delay: 0.5 + index * 0.1, duration: 0.5 }}
-                      className="flex-1 flex flex-col items-center"
-                    >
-                      <div
-                        className="w-full bg-accent-lime border-2 border-ink relative group cursor-pointer"
-                        style={{ height: `${(day.count / 6) * 100}%`, minHeight: '20px' }}
+                {weeklyActivity.length === 0 ? (
+                  <div className="h-40 flex items-center justify-center text-neutral-500">
+                    <div className="text-center">
+                      <Calendar className="w-8 h-8 mx-auto text-neutral-300 mb-2" />
+                      <p className="text-sm">이번 주 활동 기록이 없습니다</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-end justify-between h-40 gap-2">
+                    {weeklyActivity.map((day, index) => (
+                      <motion.div
+                        key={day.day}
+                        initial={{ height: 0 }}
+                        animate={{ height: `${(day.count / 6) * 100}%` }}
+                        transition={{ delay: 0.5 + index * 0.1, duration: 0.5 }}
+                        className="flex-1 flex flex-col items-center"
                       >
-                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-ink text-paper px-2 py-1 text-xs font-mono opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                          {day.count}회 / {day.score}점
+                        <div
+                          className="w-full bg-accent-lime border-2 border-ink relative group cursor-pointer"
+                          style={{ height: `${(day.count / 6) * 100}%`, minHeight: '20px' }}
+                        >
+                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-ink text-paper px-2 py-1 text-xs font-mono opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                            {day.count}회 / {day.score}점
+                          </div>
                         </div>
-                      </div>
-                      <span className="mt-2 text-xs font-mono text-neutral-500">{day.day}</span>
-                    </motion.div>
-                  ))}
-                </div>
+                        <span className="mt-2 text-xs font-mono text-neutral-500">{day.day}</span>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
               </Card>
             </motion.div>
 
@@ -230,70 +354,79 @@ export default function StatisticsPage() {
                   성장 추이
                 </h2>
 
-                <div className="relative h-48">
-                  {/* Y-axis labels */}
-                  <div className="absolute left-0 top-0 bottom-0 w-8 flex flex-col justify-between text-xs font-mono text-neutral-400">
-                    <span>100</span>
-                    <span>75</span>
-                    <span>50</span>
-                    <span>25</span>
-                    <span>0</span>
+                {recentProgress.length === 0 ? (
+                  <div className="h-48 flex items-center justify-center text-neutral-500">
+                    <div className="text-center">
+                      <TrendingUp className="w-8 h-8 mx-auto text-neutral-300 mb-2" />
+                      <p className="text-sm">면접 기록이 쌓이면 성장 추이가 표시됩니다</p>
+                    </div>
                   </div>
+                ) : (
+                  <div className="relative h-48">
+                    {/* Y-axis labels */}
+                    <div className="absolute left-0 top-0 bottom-0 w-8 flex flex-col justify-between text-xs font-mono text-neutral-400">
+                      <span>100</span>
+                      <span>75</span>
+                      <span>50</span>
+                      <span>25</span>
+                      <span>0</span>
+                    </div>
 
-                  {/* Chart area */}
-                  <div className="ml-10 h-full relative">
-                    {/* Grid lines */}
-                    {[0, 25, 50, 75, 100].map((line) => (
-                      <div
-                        key={line}
-                        className="absolute left-0 right-0 border-t border-dashed border-neutral-200"
-                        style={{ top: `${100 - line}%` }}
-                      />
-                    ))}
+                    {/* Chart area */}
+                    <div className="ml-10 h-full relative">
+                      {/* Grid lines */}
+                      {[0, 25, 50, 75, 100].map((line) => (
+                        <div
+                          key={line}
+                          className="absolute left-0 right-0 border-t border-dashed border-neutral-200"
+                          style={{ top: `${100 - line}%` }}
+                        />
+                      ))}
 
-                    {/* Data points and line */}
-                    <svg className="absolute inset-0 w-full h-full overflow-visible">
-                      <motion.polyline
-                        points={recentProgress.map((p, i) => {
-                          const x = (i / (recentProgress.length - 1)) * 100;
+                      {/* Data points and line */}
+                      <svg className="absolute inset-0 w-full h-full overflow-visible">
+                        <motion.polyline
+                          points={recentProgress.map((p, i) => {
+                            const x = recentProgress.length > 1 ? (i / (recentProgress.length - 1)) * 100 : 50;
+                            const y = 100 - p.score;
+                            return `${x}%,${y}%`;
+                          }).join(' ')}
+                          fill="none"
+                          stroke="#2E5CFF"
+                          strokeWidth="3"
+                          initial={{ pathLength: 0 }}
+                          animate={{ pathLength: 1 }}
+                          transition={{ duration: 1.5, delay: 0.6 }}
+                        />
+                        {recentProgress.map((p, i) => {
+                          const x = recentProgress.length > 1 ? (i / (recentProgress.length - 1)) * 100 : 50;
                           const y = 100 - p.score;
-                          return `${x}%,${y}%`;
-                        }).join(' ')}
-                        fill="none"
-                        stroke="#2E5CFF"
-                        strokeWidth="3"
-                        initial={{ pathLength: 0 }}
-                        animate={{ pathLength: 1 }}
-                        transition={{ duration: 1.5, delay: 0.6 }}
-                      />
-                      {recentProgress.map((p, i) => {
-                        const x = (i / (recentProgress.length - 1)) * 100;
-                        const y = 100 - p.score;
-                        return (
-                          <motion.circle
-                            key={i}
-                            cx={`${x}%`}
-                            cy={`${y}%`}
-                            r="6"
-                            fill="#2E5CFF"
-                            stroke="white"
-                            strokeWidth="2"
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            transition={{ delay: 0.8 + i * 0.1 }}
-                          />
-                        );
-                      })}
-                    </svg>
-                  </div>
+                          return (
+                            <motion.circle
+                              key={i}
+                              cx={`${x}%`}
+                              cy={`${y}%`}
+                              r="6"
+                              fill="#2E5CFF"
+                              stroke="white"
+                              strokeWidth="2"
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              transition={{ delay: 0.8 + i * 0.1 }}
+                            />
+                          );
+                        })}
+                      </svg>
+                    </div>
 
-                  {/* X-axis labels */}
-                  <div className="ml-10 flex justify-between mt-2 text-xs font-mono text-neutral-400">
-                    {recentProgress.map((p) => (
-                      <span key={p.date}>{p.date}</span>
-                    ))}
+                    {/* X-axis labels */}
+                    <div className="ml-10 flex justify-between mt-2 text-xs font-mono text-neutral-400">
+                      {recentProgress.map((p) => (
+                        <span key={p.date}>{p.date}</span>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
               </Card>
             </motion.div>
           </div>
@@ -341,21 +474,28 @@ export default function StatisticsPage() {
                 </h2>
 
                 <div className="space-y-4">
-                  {weakPoints.map((point, index) => (
-                    <motion.div
-                      key={point.skill}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: 0.5 + index * 0.1 }}
-                      className="p-3 bg-cream border-l-4 border-accent-coral"
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-semibold text-sm">{point.skill}</span>
-                        <span className="font-mono text-accent-coral">{point.score}%</span>
-                      </div>
-                      <p className="text-xs text-neutral-500">{point.suggestion}</p>
-                    </motion.div>
-                  ))}
+                  {weakPoints.length === 0 ? (
+                    <div className="p-6 text-center text-neutral-500">
+                      <TrendingDown className="w-8 h-8 mx-auto text-neutral-300 mb-2" />
+                      <p className="text-sm">취약 분야가 아직 분석되지 않았습니다</p>
+                    </div>
+                  ) : (
+                    weakPoints.map((point, index) => (
+                      <motion.div
+                        key={point.skill}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.5 + index * 0.1 }}
+                        className="p-3 bg-cream border-l-4 border-accent-coral"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-semibold text-sm">{point.skill}</span>
+                          <span className="font-mono text-accent-coral">{point.score}%</span>
+                        </div>
+                        <p className="text-xs text-neutral-500">{point.suggestion}</p>
+                      </motion.div>
+                    ))
+                  )}
                 </div>
               </Card>
             </motion.div>
@@ -400,6 +540,8 @@ export default function StatisticsPage() {
             </motion.div>
           </div>
         </div>
+        </>
+        )}
       </div>
     </div>
   );

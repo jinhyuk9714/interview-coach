@@ -40,13 +40,23 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
                 return chain.filter(exchange);
             }
 
+            // First try Authorization header
             String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+            String token = null;
 
-            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                return onError(exchange, "Missing or invalid Authorization header", HttpStatus.UNAUTHORIZED);
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                token = authHeader.substring(7);
+            } else {
+                // For SSE endpoints, also check query parameter (EventSource doesn't support headers)
+                String queryToken = request.getQueryParams().getFirst("token");
+                if (queryToken != null && !queryToken.isEmpty()) {
+                    token = queryToken;
+                }
             }
 
-            String token = authHeader.substring(7);
+            if (token == null) {
+                return onError(exchange, "Missing or invalid Authorization", HttpStatus.UNAUTHORIZED);
+            }
 
             try {
                 Claims claims = validateToken(token);

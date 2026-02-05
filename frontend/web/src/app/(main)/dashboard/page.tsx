@@ -1,9 +1,11 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'motion/react';
 import { Button, Card, CardContent, Tag, ScoreRing } from '@/components/ui';
 import { useAuthStore } from '@/stores/auth';
+import { interviewApi, statisticsApi, jdApi } from '@/lib/api';
 import {
   FileText,
   MessageSquare,
@@ -12,31 +14,91 @@ import {
   Target,
   Zap,
   Calendar,
-  ChevronRight
+  ChevronRight,
+  Loader2
 } from 'lucide-react';
 
-// Mock data - 실제로는 API에서 가져옴
-const recentInterviews = [
-  { id: 1, company: '카카오', position: '백엔드 개발자', score: 78, date: '2024-01-15', status: 'completed' },
-  { id: 2, company: '네이버', position: 'Java 개발자', score: 85, date: '2024-01-14', status: 'completed' },
-  { id: 3, company: '토스', position: 'Spring 개발자', date: '2024-01-16', status: 'in_progress' },
-];
+interface Interview {
+  id: number;
+  jdId: number;
+  companyName?: string;
+  position?: string;
+  score?: number;
+  status: string;
+  startedAt: string;
+}
 
-const quickStats = [
-  { label: '총 면접 수', value: '12', icon: MessageSquare, color: 'bg-accent-lime' },
-  { label: '평균 점수', value: '82', icon: Target, color: 'bg-accent-coral' },
-  { label: '등록된 JD', value: '5', icon: FileText, color: 'bg-accent-blue' },
-  { label: '이번 주 연습', value: '3회', icon: Calendar, color: 'bg-accent-purple' },
-];
-
-const weakPoints = [
-  { skill: 'JPA N+1 문제', score: 45 },
-  { skill: '트랜잭션 격리수준', score: 52 },
-  { skill: 'Redis 캐싱 전략', score: 58 },
-];
+interface Statistics {
+  totalInterviews: number;
+  avgScore: number;
+  totalJds: number;
+  weeklyInterviews: number;
+  weakPoints: Array<{ skill: string; score: number }>;
+}
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
+  const [recentInterviews, setRecentInterviews] = useState<Interview[]>([]);
+  const [statistics, setStatistics] = useState<Statistics | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      setIsLoading(true);
+      try {
+        // Fetch all data in parallel
+        const [interviewsRes, statsRes, jdsRes] = await Promise.allSettled([
+          interviewApi.list(),
+          statisticsApi.get(),
+          jdApi.list(),
+        ]);
+
+        // Process interviews
+        if (interviewsRes.status === 'fulfilled') {
+          const interviews = interviewsRes.value.data || [];
+          setRecentInterviews(interviews.slice(0, 3));
+        }
+
+        // Process statistics
+        if (statsRes.status === 'fulfilled') {
+          setStatistics(statsRes.value.data);
+        } else {
+          // Create default statistics from available data
+          const totalJds = jdsRes.status === 'fulfilled' ? (jdsRes.value.data?.length || 0) : 0;
+          const interviews = interviewsRes.status === 'fulfilled' ? (interviewsRes.value.data || []) : [];
+
+          setStatistics({
+            totalInterviews: interviews.length,
+            avgScore: interviews.length > 0
+              ? Math.round(interviews.reduce((acc: number, i: Interview) => acc + (i.score || 0), 0) / interviews.length)
+              : 0,
+            totalJds,
+            weeklyInterviews: interviews.filter((i: Interview) => {
+              const weekAgo = new Date();
+              weekAgo.setDate(weekAgo.getDate() - 7);
+              return new Date(i.startedAt) > weekAgo;
+            }).length,
+            weakPoints: [],
+          });
+        }
+      } catch (err) {
+        console.error('Failed to fetch dashboard data:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
+
+  const quickStats = [
+    { label: '총 면접 수', value: statistics?.totalInterviews?.toString() || '0', icon: MessageSquare, color: 'bg-accent-lime' },
+    { label: '평균 점수', value: statistics?.avgScore?.toString() || '0', icon: Target, color: 'bg-accent-coral' },
+    { label: '등록된 JD', value: statistics?.totalJds?.toString() || '0', icon: FileText, color: 'bg-accent-blue' },
+    { label: '이번 주 연습', value: `${statistics?.weeklyInterviews || 0}회`, icon: Calendar, color: 'bg-accent-purple' },
+  ];
+
+  const weakPoints = statistics?.weakPoints || [];
 
   return (
     <div className="py-8">
@@ -125,36 +187,50 @@ export default function DashboardPage() {
               </div>
 
               <div className="space-y-4">
-                {recentInterviews.map((interview, index) => (
-                  <motion.div
-                    key={interview.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.25 + index * 0.1 }}
-                    className="flex items-center justify-between p-4 bg-cream border-2 border-transparent hover:border-ink transition-colors"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-white border-2 border-ink flex items-center justify-center font-display text-lg">
-                        {interview.company.charAt(0)}
+                {isLoading ? (
+                  <div className="p-8 text-center">
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto text-neutral-400" />
+                    <p className="text-sm text-neutral-500 mt-2">불러오는 중...</p>
+                  </div>
+                ) : recentInterviews.length === 0 ? (
+                  <div className="p-8 text-center text-neutral-500">
+                    <MessageSquare className="w-8 h-8 mx-auto text-neutral-300 mb-2" />
+                    <p className="text-sm">아직 면접 기록이 없습니다</p>
+                  </div>
+                ) : (
+                  recentInterviews.map((interview, index) => (
+                    <motion.div
+                      key={interview.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.25 + index * 0.1 }}
+                      className="flex items-center justify-between p-4 bg-cream border-2 border-transparent hover:border-ink transition-colors"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-white border-2 border-ink flex items-center justify-center font-display text-lg">
+                          {(interview.companyName || 'JD').charAt(0)}
+                        </div>
+                        <div>
+                          <h3 className="font-sans font-semibold">{interview.companyName || `면접 #${interview.id}`}</h3>
+                          <p className="text-sm text-neutral-500">{interview.position || '일반 면접'}</p>
+                        </div>
                       </div>
-                      <div>
-                        <h3 className="font-sans font-semibold">{interview.company}</h3>
-                        <p className="text-sm text-neutral-500">{interview.position}</p>
-                      </div>
-                    </div>
 
-                    <div className="flex items-center gap-4">
-                      <div className="text-right hidden sm:block">
-                        <p className="text-xs text-neutral-400 font-mono">{interview.date}</p>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right hidden sm:block">
+                          <p className="text-xs text-neutral-400 font-mono">
+                            {new Date(interview.startedAt).toLocaleDateString('ko-KR')}
+                          </p>
+                        </div>
+                        {interview.status === 'completed' && interview.score ? (
+                          <ScoreRing score={interview.score} size="sm" />
+                        ) : (
+                          <Tag variant="coral">진행중</Tag>
+                        )}
                       </div>
-                      {interview.status === 'completed' ? (
-                        <ScoreRing score={interview.score!} size="sm" />
-                      ) : (
-                        <Tag variant="coral">진행중</Tag>
-                      )}
-                    </div>
-                  </motion.div>
-                ))}
+                    </motion.div>
+                  ))
+                )}
               </div>
 
               <Link href="/interview">
@@ -178,35 +254,43 @@ export default function DashboardPage() {
               </div>
 
               <div className="space-y-4">
-                {weakPoints.map((point, index) => (
-                  <motion.div
-                    key={point.skill}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.35 + index * 0.1 }}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium">{point.skill}</span>
-                      <span className="text-xs font-mono text-neutral-500">{point.score}%</span>
-                    </div>
-                    <div className="h-2 bg-neutral-200 border border-ink">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${point.score}%` }}
-                        transition={{ delay: 0.5 + index * 0.1, duration: 0.5 }}
-                        className="h-full bg-accent-coral"
-                      />
-                    </div>
-                  </motion.div>
-                ))}
+                {weakPoints.length === 0 ? (
+                  <div className="p-6 text-center text-neutral-500">
+                    <TrendingUp className="w-8 h-8 mx-auto text-neutral-300 mb-2" />
+                    <p className="text-sm">면접 기록이 쌓이면 취약 분야가 분석됩니다</p>
+                  </div>
+                ) : (
+                  weakPoints.map((point, index) => (
+                    <motion.div
+                      key={point.skill}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.35 + index * 0.1 }}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium">{point.skill}</span>
+                        <span className="text-xs font-mono text-neutral-500">{point.score}%</span>
+                      </div>
+                      <div className="h-2 bg-neutral-200 border border-ink">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${point.score}%` }}
+                          transition={{ delay: 0.5 + index * 0.1, duration: 0.5 }}
+                          className="h-full bg-accent-coral"
+                        />
+                      </div>
+                    </motion.div>
+                  ))
+                )}
               </div>
 
-              <div className="mt-6 p-4 bg-accent-lime/20 border-2 border-dashed border-accent-lime">
-                <p className="text-sm">
-                  <span className="font-semibold">팁:</span> JPA N+1 문제는 자주 출제됩니다.
-                  Fetch Join과 @BatchSize 어노테이션을 복습해보세요.
-                </p>
-              </div>
+              {weakPoints.length > 0 && (
+                <div className="mt-6 p-4 bg-accent-lime/20 border-2 border-dashed border-accent-lime">
+                  <p className="text-sm">
+                    <span className="font-semibold">팁:</span> 취약 분야를 집중적으로 연습해보세요.
+                  </p>
+                </div>
+              )}
 
               <Link href="/statistics">
                 <Button variant="ghost" className="w-full mt-4" size="sm">
