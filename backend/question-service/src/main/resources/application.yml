@@ -25,14 +25,14 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
 
-# LLM Configuration
+# LLM Configuration (빈 문자열이면 Mock 모드로 동작)
 langchain4j:
   anthropic:
-    api-key: ${CLAUDE_API_KEY}
+    api-key: ${CLAUDE_API_KEY:}
     model-name: claude-3-sonnet-20240229
 
   openai:
-    api-key: ${OPENAI_API_KEY}
+    api-key: ${OPENAI_API_KEY:}
     model-name: gpt-4-turbo-preview
 
   chroma:
@@ -43,3 +43,23 @@ logging:
   level:
     com.interviewcoach: DEBUG
     dev.langchain4j: DEBUG
+
+# Actuator & Metrics
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.75, 0.95, 0.99

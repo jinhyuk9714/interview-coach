@@ -1,0 +1,37 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: gateway
+  main:
+    web-application-type: reactive
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:your-secret-key-here-must-be-at-least-256-bits}
+
+logging:
+  level:
+    com.interviewcoach: DEBUG
+    org.springframework.cloud.gateway: DEBUG
+
+# Actuator & Metrics
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.75, 0.95, 0.99

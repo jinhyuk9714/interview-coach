@@ -1,0 +1,157 @@
+{
+  "jobDescriptions": [
+    {
+      "id": "jd-001",
+      "title": "Senior Backend Developer",
+      "company": "Tech Corp",
+      "location": "Seoul, Korea",
+      "type": "Full-time",
+      "description": "We are looking for a Senior Backend Developer to design and implement scalable microservices architecture. You will work with Java, Spring Boot, and cloud technologies to build high-performance systems serving millions of users.",
+      "responsibilities": [
+        "Design and implement RESTful APIs and microservices",
+        "Optimize database performance and queries",
+        "Lead code reviews and mentor junior developers",
+        "Collaborate with frontend and DevOps teams",
+        "Participate in architecture decisions"
+      ],
+      "requirements": [
+        "Java",
+        "Spring Boot",
+        "PostgreSQL",
+        "Redis",
+        "Kubernetes",
+        "AWS",
+        "Docker",
+        "Kafka"
+      ],
+      "preferredSkills": [
+        "MSA experience",
+        "DDD knowledge",
+        "Event-driven architecture",
+        "Performance tuning"
+      ],
+      "experience": "5+ years"
+    },
+    {
+      "id": "jd-002",
+      "title": "ML Platform Engineer",
+      "company": "AI Startup",
+      "location": "Remote",
+      "type": "Full-time",
+      "description": "Join our ML Platform team to build and maintain infrastructure for machine learning workloads at scale. You will design model serving systems, feature stores, and MLOps pipelines.",
+      "responsibilities": [
+        "Build and maintain ML training infrastructure",
+        "Design feature store and model registry",
+        "Implement model serving and monitoring",
+        "Optimize ML pipeline performance",
+        "Automate model deployment workflows"
+      ],
+      "requirements": [
+        "Python",
+        "TensorFlow",
+        "PyTorch",
+        "Kubernetes",
+        "Apache Spark",
+        "MLflow",
+        "Kubeflow"
+      ],
+      "preferredSkills": [
+        "Ray",
+        "Triton Inference Server",
+        "Feature engineering",
+        "A/B testing frameworks"
+      ],
+      "experience": "3+ years"
+    },
+    {
+      "id": "jd-003",
+      "title": "Full Stack Developer",
+      "company": "E-commerce Inc",
+      "location": "Busan, Korea",
+      "type": "Full-time",
+      "description": "Looking for a Full Stack Developer to work on our e-commerce platform. You will build features across the entire stack, from React frontend to Node.js backend, handling high-traffic scenarios.",
+      "responsibilities": [
+        "Develop responsive web applications with React",
+        "Build scalable APIs with Node.js",
+        "Integrate payment systems and third-party services",
+        "Optimize for performance and SEO",
+        "Write automated tests"
+      ],
+      "requirements": [
+        "React",
+        "Node.js",
+        "TypeScript",
+        "PostgreSQL",
+        "Redis",
+        "GraphQL"
+      ],
+      "preferredSkills": [
+        "Next.js",
+        "Stripe/Payment integration",
+        "Elasticsearch",
+        "Performance optimization"
+      ],
+      "experience": "3+ years"
+    },
+    {
+      "id": "jd-004",
+      "title": "DevOps/SRE Engineer",
+      "company": "Cloud Services",
+      "location": "Seoul, Korea",
+      "type": "Full-time",
+      "description": "We need a DevOps Engineer to improve our deployment pipelines and system reliability. You will manage Kubernetes clusters, implement monitoring solutions, and automate infrastructure.",
+      "responsibilities": [
+        "Manage and scale Kubernetes clusters",
+        "Design and implement CI/CD pipelines",
+        "Set up monitoring, alerting, and logging",
+        "Automate infrastructure with IaC",
+        "Incident response and post-mortem analysis"
+      ],
+      "requirements": [
+        "Kubernetes",
+        "Terraform",
+        "Prometheus",
+        "Grafana",
+        "AWS",
+        "Python",
+        "Go"
+      ],
+      "preferredSkills": [
+        "ArgoCD",
+        "Istio",
+        "Datadog",
+        "Cost optimization"
+      ],
+      "experience": "4+ years"
+    },
+    {
+      "id": "jd-005",
+      "title": "Security Engineer",
+      "company": "FinTech Corp",
+      "location": "Seoul, Korea",
+      "type": "Full-time",
+      "description": "Join our security team to protect financial systems and customer data. You will conduct security assessments, implement security controls, and respond to security incidents.",
+      "responsibilities": [
+        "Conduct penetration testing and vulnerability assessments",
+        "Implement and manage security tools (SIEM, WAF)",
+        "Review code for security vulnerabilities",
+        "Develop security policies and procedures",
+        "Incident response and forensics"
+      ],
+      "requirements": [
+        "Security frameworks (OWASP, NIST)",
+        "Penetration testing tools",
+        "Cloud security (AWS/GCP)",
+        "SIEM tools",
+        "Scripting (Python, Bash)"
+      ],
+      "preferredSkills": [
+        "CISSP/CEH certification",
+        "Kubernetes security",
+        "Zero trust architecture",
+        "Threat modeling"
+      ],
+      "experience": "4+ years"
+    }
+  ]
+}

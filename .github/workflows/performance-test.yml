@@ -1,0 +1,298 @@
+name: Performance Tests
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'backend/**'
+      - 'performance/**'
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Test type to run'
+        required: true
+        default: 'smoke'
+        type: choice
+        options:
+          - smoke
+          - load
+          - stress
+          - spike
+          - all
+      target_service:
+        description: 'Target service (or all)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - user-service
+          - question-service
+          - interview-service
+          - feedback-service
+
+env:
+  K6_VERSION: '0.47.0'
+  INFLUXDB_ORG: 'interview-coach'
+  INFLUXDB_BUCKET: 'k6'
+
+jobs:
+  smoke-test:
+    name: Smoke Test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event.inputs.test_type == 'smoke' || github.event.inputs.test_type == 'all'
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: interview_coach
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Build backend services
+        working-directory: backend
+        run: ./gradlew build -x test
+
+      - name: Start backend services
+        working-directory: backend
+        run: |
+          ./gradlew :user-service:bootRun &
+          ./gradlew :question-service:bootRun &
+          ./gradlew :interview-service:bootRun &
+          ./gradlew :feedback-service:bootRun &
+          # Wait for services to be ready
+          sleep 60
+
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
+
+      - name: Run Smoke Test
+        working-directory: performance/k6
+        run: |
+          k6 run scenarios/smoke-test.js \
+            --out json=../../results/smoke-test-results.json \
+            --summary-export=../../results/smoke-test-summary.json
+        env:
+          BASE_URL: http://localhost:8080
+          USER_SERVICE_URL: http://localhost:8081
+          QUESTION_SERVICE_URL: http://localhost:8082
+          INTERVIEW_SERVICE_URL: http://localhost:8083
+          FEEDBACK_SERVICE_URL: http://localhost:8084
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-test-results
+          path: results/
+          retention-days: 30
+
+      - name: Check thresholds
+        id: check-thresholds
+        run: |
+          if [ -f results/smoke-test-summary.json ]; then
+            # Check if any thresholds failed
+            FAILED=$(jq '.root_group.checks | map(select(.passes == false)) | length' results/smoke-test-summary.json)
+            if [ "$FAILED" -gt "0" ]; then
+              echo "::error::Performance thresholds failed"
+              exit 1
+            fi
+          fi
+
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            let summary = '';
+            if (fs.existsSync('results/smoke-test-summary.json')) {
+              const data = JSON.parse(fs.readFileSync('results/smoke-test-summary.json', 'utf8'));
+
+              summary = `## 🔥 Smoke Test Results
+
+              | Metric | Value |
+              |--------|-------|
+              | Total Requests | ${data.metrics?.http_reqs?.values?.count || 'N/A'} |
+              | Failed Requests | ${data.metrics?.http_req_failed?.values?.rate || 'N/A'} |
+              | Avg Response Time | ${Math.round(data.metrics?.http_req_duration?.values?.avg || 0)}ms |
+              | P95 Response Time | ${Math.round(data.metrics?.http_req_duration?.values?.['p(95)'] || 0)}ms |
+              | P99 Response Time | ${Math.round(data.metrics?.http_req_duration?.values?.['p(99)'] || 0)}ms |
+
+              ${data.metrics?.http_req_failed?.values?.rate > 0.01 ? '⚠️ **Warning:** Error rate exceeds threshold (1%)' : '✅ All thresholds passed'}
+              `;
+            } else {
+              summary = '## 🔥 Smoke Test Results\n\nNo results available.';
+            }
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: summary
+            });
+
+  load-test:
+    name: Load Test
+    runs-on: ubuntu-latest
+    if: github.event.inputs.test_type == 'load' || github.event.inputs.test_type == 'all'
+    needs: smoke-test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up infrastructure
+        run: |
+          docker-compose -f infra/docker/docker-compose.yml up -d
+          docker-compose -f performance/monitoring/docker-compose.monitoring.yml up -d
+          sleep 30
+
+      - name: Build and start services
+        working-directory: backend
+        run: |
+          ./gradlew build -x test
+          ./gradlew bootRun &
+          sleep 60
+
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
+
+      - name: Run Load Test
+        working-directory: performance/k6
+        run: |
+          k6 run scenarios/load-test.js \
+            --out influxdb=http://localhost:8086/k6 \
+            --out json=../../results/load-test-results.json \
+            --summary-export=../../results/load-test-summary.json
+        env:
+          K6_INFLUXDB_TOKEN: ${{ secrets.INFLUXDB_TOKEN }}
+          K6_INFLUXDB_ORG: ${{ env.INFLUXDB_ORG }}
+          K6_INFLUXDB_BUCKET: ${{ env.INFLUXDB_BUCKET }}
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: load-test-results
+          path: results/
+          retention-days: 30
+
+      - name: Generate report
+        run: |
+          ./performance/scripts/generate-report.sh load results/load-test-summary.json
+
+  stress-test:
+    name: Stress Test
+    runs-on: ubuntu-latest
+    if: github.event.inputs.test_type == 'stress' || github.event.inputs.test_type == 'all'
+    needs: load-test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up infrastructure
+        run: |
+          docker-compose -f infra/docker/docker-compose.yml up -d
+          docker-compose -f performance/monitoring/docker-compose.monitoring.yml up -d
+          sleep 30
+
+      - name: Build and start services
+        working-directory: backend
+        run: |
+          ./gradlew build -x test
+          ./gradlew bootRun &
+          sleep 60
+
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
+
+      - name: Run Stress Test
+        working-directory: performance/k6
+        run: |
+          k6 run scenarios/stress-test.js \
+            --out influxdb=http://localhost:8086/k6 \
+            --out json=../../results/stress-test-results.json \
+            --summary-export=../../results/stress-test-summary.json
+        env:
+          K6_INFLUXDB_TOKEN: ${{ secrets.INFLUXDB_TOKEN }}
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stress-test-results
+          path: results/
+          retention-days: 30
+
+  report:
+    name: Generate Final Report
+    runs-on: ubuntu-latest
+    needs: [smoke-test, load-test, stress-test]
+    if: always() && github.event.inputs.test_type == 'all'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-results
+
+      - name: Generate combined report
+        run: |
+          ./performance/scripts/generate-report.sh all all-results/
+
+      - name: Upload combined report
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-report
+          path: performance-report/
+          retention-days: 90
