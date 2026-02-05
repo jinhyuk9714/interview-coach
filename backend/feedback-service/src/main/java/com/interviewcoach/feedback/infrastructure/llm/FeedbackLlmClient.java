@@ -91,7 +91,8 @@ public class FeedbackLlmClient {
             @SuppressWarnings("unchecked")
             List<String> improvements = (List<String>) result.getOrDefault("improvements", List.of("더 구체적인 예시를 들어주세요"));
 
-            String tips = (String) result.getOrDefault("tips", "");
+            String tipsStr = (String) result.getOrDefault("tips", "");
+            List<String> tips = tipsStr.isEmpty() ? List.of() : List.of(tipsStr);
             String overallComment = (String) result.getOrDefault("overallComment", "");
 
             return FeedbackResponse.builder()
@@ -131,7 +132,7 @@ public class FeedbackLlmClient {
                         "더 구체적인 예시를 들어 설명하면 좋겠습니다",
                         "기술적 깊이를 더 보여주세요"
                 ))
-                .tips("답변 시 STAR 기법(상황-과제-행동-결과)을 활용하면 더 체계적인 답변이 됩니다.")
+                .tips(List.of("답변 시 STAR 기법(상황-과제-행동-결과)을 활용하면 더 체계적인 답변이 됩니다."))
                 .overallComment("전반적으로 좋은 답변이지만, 구체적인 수치와 결과를 포함하면 더 설득력이 있을 것입니다.")
                 .build();
     }

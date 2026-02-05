@@ -16,4 +16,7 @@ public class RecordAnswerRequest {
     private Boolean isCorrect;
 
     private String weakPoint;
+
+    // 실제 점수 (0-100). null이면 isCorrect 기반으로 100 또는 0 사용
+    private Integer score;
 }

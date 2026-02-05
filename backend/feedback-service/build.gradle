@@ -14,4 +14,7 @@ dependencies {
     // LangChain4j for LLM integration
     implementation 'dev.langchain4j:langchain4j:0.35.0'
     implementation 'dev.langchain4j:langchain4j-anthropic:0.35.0'
+
+    // Test - H2 Database
+    testRuntimeOnly 'com.h2database:h2'
 }

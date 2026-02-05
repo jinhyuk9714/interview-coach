@@ -102,24 +102,146 @@ export const interviewApi = {
   submitAnswer: (id: number, data: { questionOrder: number; answerText: string }) =>
     api.post(`/api/v1/interviews/${id}/answer`, data),
 
+  updateFeedback: (id: number, questionOrder: number, feedback: { score: number; strengths: string[]; improvements: string[]; tips?: string[] }) =>
+    api.put(`/api/v1/interviews/${id}/qna/${questionOrder}/feedback`, feedback),
+
   complete: (id: number) => api.post(`/api/v1/interviews/${id}/complete`),
 };
 
 // Feedback API
 export const feedbackApi = {
-  streamUrl: (sessionId: number, options?: { token?: string; question?: string; answer?: string }) => {
+  // Legacy GET URL (for short answers)
+  streamUrl: (sessionId: number, options?: { token?: string; qnaId?: number; question?: string; answer?: string }) => {
     const params = new URLSearchParams();
     if (options?.token) params.append('token', options.token);
+    if (options?.qnaId) params.append('qnaId', options.qnaId.toString());
     if (options?.question) params.append('question', options.question);
     if (options?.answer) params.append('answer', options.answer);
     const queryString = params.toString();
     return `${API_BASE_URL}/api/v1/feedback/session/${sessionId}/stream${queryString ? `?${queryString}` : ''}`;
+  },
+
+  // POST stream for long answers (no URL length limit)
+  streamPost: async (
+    sessionId: number,
+    data: { qnaId?: number; question?: string; answer?: string },
+    onFeedback: (data: Record<string, unknown>) => void,
+    onComplete: () => void | Promise<void>,
+    onError: (error: Error) => void
+  ) => {
+    const token = useAuthStore.getState().accessToken;
+    let feedbackReceived = false;
+    let completeCalled = false;
+    let feedbackData: Record<string, unknown> | null = null;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/feedback/session/${sessionId}/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No response body');
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let currentEventType = '';
+      let currentData = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // SSE messages are separated by double newlines
+        const messages = buffer.split('\n\n');
+        buffer = messages.pop() || ''; // Keep incomplete message in buffer
+
+        for (const message of messages) {
+          if (!message.trim()) continue;
+
+          const lines = message.split('\n');
+          currentEventType = '';
+          currentData = '';
+
+          for (const line of lines) {
+            if (line.startsWith('event:')) {
+              currentEventType = line.substring(6).trim();
+            } else if (line.startsWith('data:')) {
+              currentData += line.substring(5);
+            } else if (currentData && !line.startsWith('event:') && !line.startsWith(':')) {
+              // Continuation of data (data split across chunks)
+              currentData += line;
+            }
+          }
+
+          if (currentData) {
+            try {
+              const parsed = JSON.parse(currentData.trim());
+              if (currentEventType === 'feedback') {
+                feedbackReceived = true;
+                feedbackData = parsed;
+                onFeedback(parsed);
+              } else if (currentEventType === 'complete' && !completeCalled) {
+                completeCalled = true;
+                await Promise.resolve(onComplete());
+                return;
+              }
+            } catch {
+              // Ignore parse errors
+            }
+          }
+        }
+      }
+      // Call onComplete if we got feedback but stream ended without complete event
+      if (feedbackReceived && !completeCalled) {
+        completeCalled = true;
+        await Promise.resolve(onComplete());
+      }
+    } catch (error) {
+      // Only call onError if we didn't successfully receive feedback
+      if (!feedbackReceived || !feedbackData) {
+        onError(error instanceof Error ? error : new Error(String(error)));
+      } else {
+        // We got feedback, so call onComplete even if there was an error after
+        if (!completeCalled) {
+          completeCalled = true;
+          try {
+            await Promise.resolve(onComplete());
+          } catch {
+            // Ignore errors in onComplete
+          }
+        }
+      }
+    }
   },
 };
 
 // Statistics API
 export const statisticsApi = {
   get: () => api.get('/api/v1/statistics'),
+
+  record: (data: { skillCategory: string; isCorrect: boolean; weakPoint?: string; score?: number }) =>
+    api.post('/api/v1/statistics/record', data),
+};
+
+// User/Profile API
+export const userApi = {
+  getProfile: () => api.get('/api/v1/users/me'),
+
+  updateProfile: (data: { nickname?: string; targetPosition?: string; experienceYears?: number }) =>
+    api.put('/api/v1/users/me', data),
 };
 
 export default api;

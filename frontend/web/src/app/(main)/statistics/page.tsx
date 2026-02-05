@@ -90,6 +90,12 @@ export default function StatisticsPage() {
         // Process overall stats
         if (statsRes.status === 'fulfilled' && statsRes.value.data) {
           const data = statsRes.value.data;
+
+          // Debug logging
+          console.log('Statistics API response:', data);
+          console.log('Category stats from API:', data.categoryStats);
+          console.log('Weak points from API:', data.weakPoints);
+
           setOverallStats({
             totalInterviews: data.totalInterviews || 0,
             totalQuestions: data.totalQuestions || 0,
@@ -99,11 +105,16 @@ export default function StatisticsPage() {
             rank: data.rank || getRank(data.avgScore || 0),
           });
 
-          if (data.categoryStats) {
-            setCategoryStats(data.categoryStats.map((cat: CategoryStat, i: number) => ({
-              ...cat,
+          if (data.categoryStats && data.categoryStats.length > 0) {
+            const mappedStats = data.categoryStats.map((cat: CategoryStat, i: number) => ({
+              category: cat.category,
+              score: cat.score,
+              total: cat.total,
+              trend: cat.trend || 0,
               color: categoryColors[i % categoryColors.length],
-            })));
+            }));
+            console.log('Mapped category stats:', mappedStats);
+            setCategoryStats(mappedStats);
           }
 
           if (data.weeklyActivity) {
@@ -114,8 +125,11 @@ export default function StatisticsPage() {
             setRecentProgress(data.recentProgress);
           }
 
-          if (data.weakPoints) {
+          if (data.weakPoints && data.weakPoints.length > 0) {
+            console.log('Setting weak points:', data.weakPoints);
             setWeakPoints(data.weakPoints);
+          } else {
+            console.log('No weak points in API response');
           }
 
           // Update achievements based on stats
@@ -318,25 +332,34 @@ export default function StatisticsPage() {
                   </div>
                 ) : (
                   <div className="flex items-end justify-between h-40 gap-2">
-                    {weeklyActivity.map((day, index) => (
-                      <motion.div
-                        key={day.day}
-                        initial={{ height: 0 }}
-                        animate={{ height: `${(day.count / 6) * 100}%` }}
-                        transition={{ delay: 0.5 + index * 0.1, duration: 0.5 }}
-                        className="flex-1 flex flex-col items-center"
-                      >
-                        <div
-                          className="w-full bg-accent-lime border-2 border-ink relative group cursor-pointer"
-                          style={{ height: `${(day.count / 6) * 100}%`, minHeight: '20px' }}
+                    {weeklyActivity.map((day, index) => {
+                      // Calculate max count for normalization
+                      const maxCount = Math.max(...weeklyActivity.map(d => d.count), 1);
+                      const heightPercent = day.count > 0 ? Math.max((day.count / maxCount) * 100, 15) : 5;
+
+                      return (
+                        <motion.div
+                          key={day.day}
+                          initial={{ opacity: 0, scaleY: 0 }}
+                          animate={{ opacity: 1, scaleY: 1 }}
+                          transition={{ delay: 0.5 + index * 0.1, duration: 0.5 }}
+                          className="flex-1 flex flex-col items-center justify-end h-full"
+                          style={{ originY: 1 }}
                         >
-                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-ink text-paper px-2 py-1 text-xs font-mono opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                            {day.count}회 / {day.score}점
+                          <div
+                            className={`w-full border-2 border-ink relative group cursor-pointer transition-colors ${
+                              day.count > 0 ? 'bg-accent-lime' : 'bg-neutral-100'
+                            }`}
+                            style={{ height: `${heightPercent}%` }}
+                          >
+                            <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-ink text-paper px-2 py-1 text-xs font-mono opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                              {day.count}회 {day.score > 0 ? `/ ${day.score}점` : ''}
+                            </div>
                           </div>
-                        </div>
-                        <span className="mt-2 text-xs font-mono text-neutral-500">{day.day}</span>
-                      </motion.div>
-                    ))}
+                          <span className="mt-2 text-xs font-mono text-neutral-500">{day.day}</span>
+                        </motion.div>
+                      );
+                    })}
                   </div>
                 )}
               </Card>
@@ -362,9 +385,9 @@ export default function StatisticsPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="relative h-48">
+                  <div className="relative h-52">
                     {/* Y-axis labels */}
-                    <div className="absolute left-0 top-0 bottom-0 w-8 flex flex-col justify-between text-xs font-mono text-neutral-400">
+                    <div className="absolute left-0 top-0 h-40 w-8 flex flex-col justify-between text-xs font-mono text-neutral-400">
                       <span>100</span>
                       <span>75</span>
                       <span>50</span>
@@ -373,9 +396,9 @@ export default function StatisticsPage() {
                     </div>
 
                     {/* Chart area */}
-                    <div className="ml-10 h-full relative">
+                    <div className="ml-10 h-40 relative bg-neutral-50/50 border border-neutral-100">
                       {/* Grid lines */}
-                      {[0, 25, 50, 75, 100].map((line) => (
+                      {[25, 50, 75].map((line) => (
                         <div
                           key={line}
                           className="absolute left-0 right-0 border-t border-dashed border-neutral-200"
@@ -383,44 +406,55 @@ export default function StatisticsPage() {
                         />
                       ))}
 
-                      {/* Data points and line */}
-                      <svg className="absolute inset-0 w-full h-full overflow-visible">
+                      {/* Line chart using SVG */}
+                      <svg
+                        className="absolute inset-0 w-full h-full"
+                        viewBox="0 0 100 100"
+                        preserveAspectRatio="none"
+                        style={{ overflow: 'visible' }}
+                      >
                         <motion.polyline
                           points={recentProgress.map((p, i) => {
                             const x = recentProgress.length > 1 ? (i / (recentProgress.length - 1)) * 100 : 50;
                             const y = 100 - p.score;
-                            return `${x}%,${y}%`;
+                            return `${x},${y}`;
                           }).join(' ')}
                           fill="none"
                           stroke="#2E5CFF"
-                          strokeWidth="3"
+                          strokeWidth="2"
+                          strokeLinejoin="round"
+                          strokeLinecap="round"
+                          vectorEffect="non-scaling-stroke"
                           initial={{ pathLength: 0 }}
                           animate={{ pathLength: 1 }}
-                          transition={{ duration: 1.5, delay: 0.6 }}
+                          transition={{ duration: 1, delay: 0.3 }}
                         />
-                        {recentProgress.map((p, i) => {
-                          const x = recentProgress.length > 1 ? (i / (recentProgress.length - 1)) * 100 : 50;
-                          const y = 100 - p.score;
-                          return (
-                            <motion.circle
-                              key={i}
-                              cx={`${x}%`}
-                              cy={`${y}%`}
-                              r="6"
-                              fill="#2E5CFF"
-                              stroke="white"
-                              strokeWidth="2"
-                              initial={{ scale: 0 }}
-                              animate={{ scale: 1 }}
-                              transition={{ delay: 0.8 + i * 0.1 }}
-                            />
-                          );
-                        })}
                       </svg>
+
+                      {/* Data points as positioned divs (not affected by SVG scaling) */}
+                      {recentProgress.map((p, i) => {
+                        const xPercent = recentProgress.length > 1 ? (i / (recentProgress.length - 1)) * 100 : 50;
+                        const yPercent = 100 - p.score;
+                        return (
+                          <motion.div
+                            key={i}
+                            className="absolute w-3 h-3 bg-accent-blue border-2 border-white rounded-full shadow-sm cursor-pointer hover:scale-125 transition-transform"
+                            style={{
+                              left: `${xPercent}%`,
+                              top: `${yPercent}%`,
+                              transform: 'translate(-50%, -50%)',
+                            }}
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            transition={{ delay: 0.5 + i * 0.1 }}
+                            title={`${p.date}: ${p.score}점`}
+                          />
+                        );
+                      })}
                     </div>
 
                     {/* X-axis labels */}
-                    <div className="ml-10 flex justify-between mt-2 text-xs font-mono text-neutral-400">
+                    <div className="ml-10 flex justify-between mt-3 text-xs font-mono text-neutral-400">
                       {recentProgress.map((p) => (
                         <span key={p.date}>{p.date}</span>
                       ))}
@@ -456,7 +490,12 @@ export default function StatisticsPage() {
                   <span className="font-display text-2xl">{overallStats.rank}</span>
                 </div>
                 <p className="text-sm text-neutral-500 mt-4">
-                  상위 15% 수준입니다
+                  {overallStats.rank === 'S' && '상위 5% 수준입니다'}
+                  {overallStats.rank === 'A' && '상위 15% 수준입니다'}
+                  {overallStats.rank === 'B' && '상위 30% 수준입니다'}
+                  {overallStats.rank === 'C' && '상위 50% 수준입니다'}
+                  {overallStats.rank === 'D' && '더 노력이 필요합니다'}
+                  {overallStats.rank === '-' && '면접 연습을 시작해보세요'}
                 </p>
               </Card>
             </motion.div>

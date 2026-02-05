@@ -13,7 +13,9 @@ import {
   BarChart3,
   LogOut,
   Menu,
-  X
+  X,
+  User,
+  History
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -21,6 +23,7 @@ const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/jd', label: 'JD 분석', icon: FileText },
   { href: '/interview', label: '면접', icon: MessageSquare },
+  { href: '/history', label: '기록', icon: History },
   { href: '/statistics', label: '통계', icon: BarChart3 },
 ];
 
@@ -79,7 +82,7 @@ export function Header() {
           <div className="flex items-center gap-4">
             {isAuthenticated ? (
               <>
-                <div className="hidden sm:flex items-center gap-3">
+                <Link href="/profile" className="hidden sm:flex items-center gap-3 hover:opacity-80 transition-opacity">
                   <div className="w-8 h-8 bg-accent-lime border-2 border-ink flex items-center justify-center">
                     <span className="font-mono text-xs font-bold">
                       {user?.nickname?.charAt(0).toUpperCase() || 'U'}
@@ -88,7 +91,7 @@ export function Header() {
                   <span className="font-sans text-sm font-medium">
                     {user?.nickname}
                   </span>
-                </div>
+                </Link>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -148,6 +151,14 @@ export function Header() {
                 </Link>
               );
             })}
+            <Link
+              href="/profile"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center gap-3 px-4 py-3 font-sans text-sm font-medium text-neutral-600 hover:bg-neutral-100"
+            >
+              <User className="w-5 h-5" />
+              프로필
+            </Link>
             <button
               onClick={() => {
                 logout();

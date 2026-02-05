@@ -31,9 +31,10 @@ public class ClaudeLlmClient implements LlmClient {
                     .modelName(modelName)
                     .maxTokens(4096)
                     .build();
+            log.info("ClaudeLlmClient initialized with Claude API (model: {})", modelName);
         } else {
             this.chatModel = null;
-            log.warn("Claude API key not configured. LLM features will be disabled.");
+            log.warn("Claude API key not configured. LLM features will use mock data.");
         }
         this.objectMapper = objectMapper;
     }
@@ -108,13 +109,20 @@ public class ClaudeLlmClient implements LlmClient {
             [
                 {
                     "questionType": "technical 또는 behavioral",
-                    "skillCategory": "관련 기술/역량",
+                    "skillCategory": "아래 카테고리 중 하나만 선택",
                     "questionText": "면접 질문",
                     "hint": "답변 힌트 (1-2문장)",
                     "idealAnswer": "모범 답변 요약 (2-3문장)",
                     "difficulty": %d
                 }
             ]
+
+            skillCategory는 반드시 다음 중 하나만 사용하세요:
+            - 기술역량 (코딩, 알고리즘, 자료구조, 프로그래밍 언어 관련)
+            - 시스템설계 (아키텍처, 인프라, 확장성, 성능 관련)
+            - 문제해결 (트러블슈팅, 디버깅, 분석력 관련)
+            - 협업 (팀워크, 커뮤니케이션, 리더십 관련)
+            - 프로젝트경험 (실제 프로젝트 경험, 성과 관련)
 
             JSON 배열만 응답하고 다른 텍스트는 포함하지 마세요.
             """.formatted(jdText, String.join(", ", skills), typeInstruction, difficultyDesc, count, difficulty);
@@ -219,27 +227,28 @@ public class ClaudeLlmClient implements LlmClient {
     private List<GeneratedQuestionResult> createMockQuestions(String questionType, int count, int difficulty) {
         List<GeneratedQuestionResult> questions = new ArrayList<>();
 
+        // 카테고리: 기술역량, 시스템설계, 문제해결, 협업, 프로젝트경험
         List<GeneratedQuestionResult> technicalQuestions = List.of(
-                new GeneratedQuestionResult("technical", "Java",
+                new GeneratedQuestionResult("technical", "기술역량",
                         "Java의 가비지 컬렉션(GC) 동작 원리와 GC 튜닝 경험에 대해 설명해주세요.",
                         "Young/Old Generation, GC 알고리즘 종류를 언급하세요",
                         "Java GC는 Heap 메모리를 Young과 Old Generation으로 나누어 관리합니다.", difficulty),
-                new GeneratedQuestionResult("technical", "Spring",
+                new GeneratedQuestionResult("technical", "기술역량",
                         "Spring의 IoC/DI 개념과 실제 프로젝트에서 어떻게 활용했는지 설명해주세요.",
                         "의존성 주입의 장점과 테스트 용이성을 언급하세요",
                         "IoC는 제어의 역전으로, 객체 생성과 생명주기를 컨테이너가 관리합니다.", difficulty),
-                new GeneratedQuestionResult("technical", "Database",
-                        "N+1 문제가 무엇이며 어떻게 해결하셨나요?",
-                        "Fetch Join, EntityGraph, BatchSize 등의 해결책을 언급하세요",
-                        "N+1 문제는 연관 엔티티 조회 시 추가 쿼리가 발생하는 문제입니다.", difficulty)
+                new GeneratedQuestionResult("technical", "시스템설계",
+                        "대용량 트래픽을 처리하기 위한 시스템 설계 경험이 있다면 설명해주세요.",
+                        "캐싱, 로드밸런싱, 비동기 처리 등을 언급하세요",
+                        "대용량 트래픽 처리를 위해 Redis 캐싱과 메시지 큐를 활용했습니다.", difficulty)
         );
 
         List<GeneratedQuestionResult> behavioralQuestions = List.of(
-                new GeneratedQuestionResult("behavioral", "Problem Solving",
+                new GeneratedQuestionResult("behavioral", "문제해결",
                         "기술적으로 어려운 문제를 해결한 경험에 대해 말씀해주세요.",
                         "STAR 기법으로 구체적인 상황과 행동, 결과를 설명하세요",
                         "문제 상황, 분석 과정, 해결 방법, 결과를 체계적으로 설명합니다.", difficulty),
-                new GeneratedQuestionResult("behavioral", "Teamwork",
+                new GeneratedQuestionResult("behavioral", "협업",
                         "팀원과 의견 충돌이 있었던 경험과 어떻게 해결했는지 설명해주세요.",
                         "경청, 논리적 설득, 합의점 도출 과정을 설명하세요",
                         "의견 충돌 시 상대방 의견을 경청하고 데이터 기반으로 논의했습니다.", difficulty)

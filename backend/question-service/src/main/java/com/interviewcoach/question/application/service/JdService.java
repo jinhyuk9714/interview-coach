@@ -76,4 +76,18 @@ public class JdService {
                 .summary(result.summary())
                 .build();
     }
+
+    @Transactional
+    public void deleteJd(Long userId, Long jdId) {
+        JobDescription jd = jdRepository.findById(jdId)
+                .orElseThrow(() -> new JdNotFoundException(jdId));
+
+        // 본인의 JD만 삭제 가능
+        if (!jd.getUserId().equals(userId)) {
+            throw new IllegalArgumentException("해당 JD를 삭제할 권한이 없습니다.");
+        }
+
+        jdRepository.delete(jd);
+        log.info("Deleted JD: id={}, userId={}", jdId, userId);
+    }
 }

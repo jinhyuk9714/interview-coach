@@ -17,4 +17,7 @@ dependencies {
 
     // Jsoup (HTML parsing for URL crawling)
     implementation 'org.jsoup:jsoup:1.17.2'
+
+    // Test - H2 Database
+    testRuntimeOnly 'com.h2database:h2'
 }
