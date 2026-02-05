@@ -10,4 +10,6 @@ public interface GeneratedQuestionRepository extends JpaRepository<GeneratedQues
     List<GeneratedQuestion> findByJdId(Long jdId);
 
     List<GeneratedQuestion> findByJdIdAndQuestionType(Long jdId, String questionType);
+
+    void deleteByJdId(Long jdId);
 }

@@ -44,4 +44,12 @@ public class JdController {
         JdAnalysisResponse response = jdService.analyzeJd(id);
         return ResponseEntity.ok(response);
     }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteJd(
+            @RequestHeader("X-User-Id") Long userId,
+            @PathVariable Long id) {
+        jdService.deleteJd(userId, id);
+        return ResponseEntity.noContent().build();
+    }
 }

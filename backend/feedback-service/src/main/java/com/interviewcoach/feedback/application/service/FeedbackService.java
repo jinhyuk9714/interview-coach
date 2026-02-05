@@ -19,12 +19,14 @@ public class FeedbackService {
     private final FeedbackLlmClient feedbackLlmClient;
 
     public SseEmitter streamFeedback(Long sessionId, Long qnaId, String questionText, String answerText) {
-        SseEmitter emitter = sseEmitterManager.createEmitter(sessionId);
+        // Use unique key: sessionId_qnaId to prevent SSE collision when answering quickly
+        String emitterKey = sessionId + "_" + (qnaId != null ? qnaId : System.currentTimeMillis());
+        SseEmitter emitter = sseEmitterManager.createEmitter(emitterKey);
 
         // 비동기로 피드백 생성 및 스트리밍
         CompletableFuture.runAsync(() -> {
             try {
-                log.info("Generating feedback for session: {}, question: {}", sessionId,
+                log.info("Generating feedback for session: {}, qnaId: {}, question: {}", sessionId, qnaId,
                     questionText != null ? questionText.substring(0, Math.min(50, questionText.length())) + "..." : "null");
 
                 // LLM으로 피드백 생성
@@ -36,18 +38,18 @@ public class FeedbackService {
                     feedback = feedbackLlmClient.generateFeedback(sessionId, qnaId, "", "");
                 }
 
-                sseEmitterManager.sendFeedback(sessionId, feedback);
+                sseEmitterManager.sendFeedback(emitterKey, feedback);
 
                 // 스트리밍 완료
                 Thread.sleep(200);
-                sseEmitterManager.complete(sessionId);
+                sseEmitterManager.complete(emitterKey);
 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                sseEmitterManager.completeWithError(sessionId, e);
+                sseEmitterManager.completeWithError(emitterKey, e);
             } catch (Exception e) {
                 log.error("Error streaming feedback for session {}: {}", sessionId, e.getMessage());
-                sseEmitterManager.completeWithError(sessionId, e);
+                sseEmitterManager.completeWithError(emitterKey, e);
             }
         });
 

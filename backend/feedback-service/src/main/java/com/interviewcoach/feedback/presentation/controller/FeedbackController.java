@@ -21,4 +21,14 @@ public class FeedbackController {
             @RequestParam(required = false) String answer) {
         return feedbackService.streamFeedback(sessionId, qnaId, question, answer);
     }
+
+    // POST endpoint for long answers (no URL length limit)
+    @PostMapping(value = "/session/{sessionId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamFeedbackPost(
+            @PathVariable Long sessionId,
+            @RequestBody FeedbackRequest request) {
+        return feedbackService.streamFeedback(sessionId, request.qnaId(), request.question(), request.answer());
+    }
+
+    public record FeedbackRequest(Long qnaId, String question, String answer) {}
 }

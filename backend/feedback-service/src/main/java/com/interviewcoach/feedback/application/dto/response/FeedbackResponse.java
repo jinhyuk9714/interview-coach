@@ -14,6 +14,6 @@ public class FeedbackResponse {
     private Integer score;
     private List<String> strengths;
     private List<String> improvements;
-    private String tips;
+    private List<String> tips;
     private String overallComment;
 }

@@ -17,7 +17,8 @@ import {
   Check,
   ArrowRight,
   X,
-  AlertCircle
+  AlertCircle,
+  Trash2
 } from 'lucide-react';
 import type { JobDescription, JdAnalysis, GeneratedQuestion } from '@/types';
 
@@ -40,6 +41,8 @@ export default function JdPage() {
   });
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<JobDescription | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Load JD list on mount
   useEffect(() => {
@@ -126,6 +129,27 @@ export default function JdPage() {
     }
   };
 
+  const handleDeleteJd = async () => {
+    if (!deleteTarget) return;
+
+    setIsDeleting(true);
+    try {
+      await jdApi.delete(deleteTarget.id);
+      setJdList(jdList.filter(jd => jd.id !== deleteTarget.id));
+      if (selectedJd?.id === deleteTarget.id) {
+        setSelectedJd(null);
+        setAnalysis(null);
+        setQuestions([]);
+      }
+      setDeleteTarget(null);
+    } catch (err) {
+      console.error('Failed to delete JD:', err);
+      setError('JD 삭제에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className="py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -203,18 +227,20 @@ export default function JdPage() {
                   </div>
                 ) : (
                   jdList.map((jd) => (
-                    <motion.button
+                    <div
                       key={jd.id}
-                      onClick={() => handleAnalyze(jd)}
                       className={`w-full p-4 text-left transition-colors ${
                         selectedJd?.id === jd.id
                           ? 'bg-accent-lime/20'
                           : 'hover:bg-neutral-50'
                       }`}
-                      whileHover={{ x: 4 }}
                     >
                       <div className="flex items-start justify-between">
-                        <div>
+                        <motion.button
+                          onClick={() => handleAnalyze(jd)}
+                          className="flex-1 text-left"
+                          whileHover={{ x: 4 }}
+                        >
                           <h3 className="font-sans font-semibold">{jd.companyName}</h3>
                           <p className="text-sm text-neutral-500">{jd.position}</p>
                           {jd.parsedSkills && jd.parsedSkills.length > 0 && (
@@ -227,10 +253,22 @@ export default function JdPage() {
                               )}
                             </div>
                           )}
+                        </motion.button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteTarget(jd);
+                            }}
+                            className="p-1.5 text-neutral-400 hover:text-accent-coral hover:bg-accent-coral/10 rounded transition-colors"
+                            title="삭제"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                          <ChevronRight className="w-5 h-5 text-neutral-400" />
                         </div>
-                        <ChevronRight className="w-5 h-5 text-neutral-400" />
                       </div>
-                    </motion.button>
+                    </div>
                   ))
                 )}
               </div>
@@ -393,6 +431,57 @@ export default function JdPage() {
           </motion.div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {deleteTarget && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/50"
+            onClick={() => setDeleteTarget(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md"
+            >
+              <Card className="p-6">
+                <div className="text-center mb-6">
+                  <div className="w-16 h-16 bg-accent-coral/10 border-2 border-accent-coral flex items-center justify-center mx-auto mb-4">
+                    <Trash2 className="w-8 h-8 text-accent-coral" />
+                  </div>
+                  <h3 className="text-xl font-display mb-2">JD를 삭제하시겠습니까?</h3>
+                  <p className="text-neutral-500 text-sm">
+                    <span className="font-semibold">{deleteTarget.companyName}</span>의{' '}
+                    <span className="font-semibold">{deleteTarget.position}</span> 포지션을
+                    삭제합니다. 이 작업은 되돌릴 수 없습니다.
+                  </p>
+                </div>
+                <div className="flex gap-3 justify-center">
+                  <Button
+                    variant="secondary"
+                    onClick={() => setDeleteTarget(null)}
+                    disabled={isDeleting}
+                  >
+                    취소
+                  </Button>
+                  <Button
+                    onClick={handleDeleteJd}
+                    isLoading={isDeleting}
+                    className="bg-accent-coral hover:bg-accent-coral/90"
+                  >
+                    삭제하기
+                  </Button>
+                </div>
+              </Card>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Create Modal */}
       <AnimatePresence>

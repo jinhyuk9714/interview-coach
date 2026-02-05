@@ -38,6 +38,10 @@ public class UserStatistics {
     @Builder.Default
     private Integer correctCount = 0;
 
+    @Column(name = "total_score")
+    @Builder.Default
+    private Integer totalScore = 0;
+
     @Column(name = "correct_rate", precision = 5, scale = 2)
     @Builder.Default
     private BigDecimal correctRate = BigDecimal.ZERO;
@@ -65,17 +69,24 @@ public class UserStatistics {
      *     결과: 10 -> 11 (예상: 12)
      */
     public void recordAnswer(boolean isCorrect) {
+        recordAnswer(isCorrect, isCorrect ? 100 : 0);
+    }
+
+    /**
+     * 점수 기반 답변 기록
+     */
+    public void recordAnswer(boolean isCorrect, int score) {
         // Race condition 발생 가능 지점!
         this.totalQuestions = this.totalQuestions + 1;
+        this.totalScore = this.totalScore + score;
 
         if (isCorrect) {
             this.correctCount = this.correctCount + 1;
         }
 
-        // 정답률 재계산
+        // 평균 점수 재계산 (correctRate를 평균 점수로 사용)
         if (this.totalQuestions > 0) {
-            this.correctRate = BigDecimal.valueOf(this.correctCount)
-                    .multiply(BigDecimal.valueOf(100))
+            this.correctRate = BigDecimal.valueOf(this.totalScore)
                     .divide(BigDecimal.valueOf(this.totalQuestions), 2, RoundingMode.HALF_UP);
         }
     }

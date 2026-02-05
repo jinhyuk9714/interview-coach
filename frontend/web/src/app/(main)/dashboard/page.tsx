@@ -24,6 +24,7 @@ interface Interview {
   companyName?: string;
   position?: string;
   score?: number;
+  avgScore?: number;  // API returns avgScore
   status: string;
   startedAt: string;
 }
@@ -34,17 +35,28 @@ interface Statistics {
   totalJds: number;
   weeklyInterviews: number;
   weakPoints: Array<{ skill: string; score: number }>;
+  // API response fields
+  weeklyActivity?: Array<{ day: string; count: number; score: number }>;
 }
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
   const [recentInterviews, setRecentInterviews] = useState<Interview[]>([]);
-  const [statistics, setStatistics] = useState<Statistics | null>(null);
+  const [statistics, setStatistics] = useState<Statistics>({
+    totalInterviews: 0,
+    avgScore: 0,
+    totalJds: 0,
+    weeklyInterviews: 0,
+    weakPoints: [],
+  });
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       setIsLoading(true);
+      setError(null);
+
       try {
         // Fetch all data in parallel
         const [interviewsRes, statsRes, jdsRes] = await Promise.allSettled([
@@ -53,36 +65,74 @@ export default function DashboardPage() {
           jdApi.list(),
         ]);
 
+        // Log API responses for debugging
+        console.log('Dashboard API responses:', {
+          interviews: interviewsRes,
+          stats: statsRes,
+          jds: jdsRes,
+        });
+
         // Process interviews
+        let interviews: Interview[] = [];
         if (interviewsRes.status === 'fulfilled') {
-          const interviews = interviewsRes.value.data || [];
+          const interviewData = interviewsRes.value.data;
+          // API returns {totalCount, interviews: []} format
+          interviews = Array.isArray(interviewData)
+            ? interviewData
+            : (interviewData?.interviews || []);
           setRecentInterviews(interviews.slice(0, 3));
+        } else {
+          console.error('Failed to fetch interviews:', interviewsRes.reason);
         }
 
+        // Get JD count
+        const totalJds = jdsRes.status === 'fulfilled' ? (jdsRes.value.data?.length || 0) : 0;
+
         // Process statistics
-        if (statsRes.status === 'fulfilled') {
-          setStatistics(statsRes.value.data);
+        if (statsRes.status === 'fulfilled' && statsRes.value.data) {
+          const apiStats = statsRes.value.data;
+
+          // Calculate weeklyInterviews from weeklyActivity if available
+          const weeklyInterviews = apiStats.weeklyActivity
+            ? apiStats.weeklyActivity.reduce((sum: number, day: { count: number }) => sum + day.count, 0)
+            : interviews.filter((i: Interview) => {
+                const weekAgo = new Date();
+                weekAgo.setDate(weekAgo.getDate() - 7);
+                return new Date(i.startedAt) > weekAgo;
+              }).length;
+
+          setStatistics({
+            totalInterviews: apiStats.totalInterviews ?? interviews.length,
+            avgScore: apiStats.avgScore ?? 0,
+            totalJds,
+            weeklyInterviews,
+            weakPoints: apiStats.weakPoints || [],
+          });
         } else {
-          // Create default statistics from available data
-          const totalJds = jdsRes.status === 'fulfilled' ? (jdsRes.value.data?.length || 0) : 0;
-          const interviews = interviewsRes.status === 'fulfilled' ? (interviewsRes.value.data || []) : [];
+          // Fallback: calculate statistics from interviews
+          const completedInterviews = interviews.filter(i => i.status === 'completed');
+          const avgScore = completedInterviews.length > 0
+            ? Math.round(completedInterviews.reduce((acc, i) => acc + (i.avgScore || i.score || 0), 0) / completedInterviews.length)
+            : 0;
+
+          const weekAgo = new Date();
+          weekAgo.setDate(weekAgo.getDate() - 7);
 
           setStatistics({
             totalInterviews: interviews.length,
-            avgScore: interviews.length > 0
-              ? Math.round(interviews.reduce((acc: number, i: Interview) => acc + (i.score || 0), 0) / interviews.length)
-              : 0,
+            avgScore,
             totalJds,
-            weeklyInterviews: interviews.filter((i: Interview) => {
-              const weekAgo = new Date();
-              weekAgo.setDate(weekAgo.getDate() - 7);
-              return new Date(i.startedAt) > weekAgo;
-            }).length,
+            weeklyInterviews: interviews.filter(i => new Date(i.startedAt) > weekAgo).length,
             weakPoints: [],
           });
+
+          if (statsRes.status === 'rejected') {
+            console.error('Failed to fetch statistics:', statsRes.reason);
+          }
         }
       } catch (err) {
         console.error('Failed to fetch dashboard data:', err);
+        setError('데이터를 불러오는데 실패했습니다.');
       } finally {
         setIsLoading(false);
       }
@@ -92,13 +142,13 @@ export default function DashboardPage() {
   }, []);
 
   const quickStats = [
-    { label: '총 면접 수', value: statistics?.totalInterviews?.toString() || '0', icon: MessageSquare, color: 'bg-accent-lime' },
-    { label: '평균 점수', value: statistics?.avgScore?.toString() || '0', icon: Target, color: 'bg-accent-coral' },
-    { label: '등록된 JD', value: statistics?.totalJds?.toString() || '0', icon: FileText, color: 'bg-accent-blue' },
-    { label: '이번 주 연습', value: `${statistics?.weeklyInterviews || 0}회`, icon: Calendar, color: 'bg-accent-purple' },
+    { label: '총 면접 수', value: statistics.totalInterviews.toString(), icon: MessageSquare, color: 'bg-accent-lime' },
+    { label: '평균 점수', value: statistics.avgScore.toString(), icon: Target, color: 'bg-accent-coral' },
+    { label: '등록된 JD', value: statistics.totalJds.toString(), icon: FileText, color: 'bg-accent-blue' },
+    { label: '이번 주 연습', value: `${statistics.weeklyInterviews}회`, icon: Calendar, color: 'bg-accent-purple' },
   ];
 
-  const weakPoints = statistics?.weakPoints || [];
+  const weakPoints = statistics.weakPoints || [];
 
   return (
     <div className="py-8">
@@ -133,6 +183,18 @@ export default function DashboardPage() {
             </div>
           </div>
         </motion.div>
+
+        {/* Error Alert */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8 p-4 bg-accent-coral/10 border-2 border-accent-coral flex items-center gap-3"
+          >
+            <TrendingUp className="w-5 h-5 text-accent-coral" />
+            <p className="text-sm text-accent-coral">{error}</p>
+          </motion.div>
+        )}
 
         {/* Quick Stats */}
         <motion.div
@@ -222,8 +284,8 @@ export default function DashboardPage() {
                             {new Date(interview.startedAt).toLocaleDateString('ko-KR')}
                           </p>
                         </div>
-                        {interview.status === 'completed' && interview.score ? (
-                          <ScoreRing score={interview.score} size="sm" />
+                        {interview.status === 'completed' && (interview.avgScore || interview.score) ? (
+                          <ScoreRing score={interview.avgScore || interview.score || 0} size="sm" />
                         ) : (
                           <Tag variant="coral">진행중</Tag>
                         )}

@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { motion } from 'motion/react';
 import { Button, Card, Textarea, Tag, ScoreRing } from '@/components/ui';
 import { useInterviewStore } from '@/stores/interview';
-import { useAuthStore } from '@/stores/auth';
-import { interviewApi, feedbackApi, questionApi } from '@/lib/api';
+import { interviewApi, feedbackApi, questionApi, statisticsApi, jdApi } from '@/lib/api';
 import {
   Brain,
   Send,
@@ -19,9 +19,17 @@ import {
   RotateCcw,
   MessageSquare,
   AlertCircle,
-  Loader2
+  Loader2,
+  FileText
 } from 'lucide-react';
-import type { InterviewQna, QnaFeedback, GeneratedQuestion } from '@/types';
+import type { InterviewQna, QnaFeedback, GeneratedQuestion, JobDescription } from '@/types';
+
+// Track question with its skill category for statistics
+interface QuestionWithCategory {
+  questionType: string;
+  questionText: string;
+  skillCategory: string;
+}
 
 export default function InterviewPage() {
   const searchParams = useSearchParams();
@@ -46,19 +54,43 @@ export default function InterviewPage() {
   const [showFeedback, setShowFeedback] = useState(false);
   const [isStarted, setIsStarted] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
-  const [results, setResults] = useState<{ qna: InterviewQna; feedback: QnaFeedback }[]>([]);
+  const [results, setResults] = useState<{ qna: InterviewQna; feedback: QnaFeedback; skillCategory: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [availableQuestions, setAvailableQuestions] = useState<GeneratedQuestion[]>([]);
+  const [jdList, setJdList] = useState<JobDescription[]>([]);
+  const [isLoadingJds, setIsLoadingJds] = useState(false);
+  const [selectedJdId, setSelectedJdId] = useState<number | null>(jdId ? parseInt(jdId) : null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [questionsWithCategory, setQuestionsWithCategory] = useState<QuestionWithCategory[]>([]);
+  const questionsWithCategoryRef = useRef<QuestionWithCategory[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
+
+  // Load JD list when no jdId is provided
+  useEffect(() => {
+    const loadJdList = async () => {
+      if (!jdId) {
+        setIsLoadingJds(true);
+        try {
+          const response = await jdApi.list();
+          setJdList(response.data || []);
+        } catch (err) {
+          console.error('Failed to load JD list:', err);
+        } finally {
+          setIsLoadingJds(false);
+        }
+      }
+    };
+    loadJdList();
+  }, [jdId]);
 
   // Load questions for the JD
   useEffect(() => {
     const loadQuestions = async () => {
-      if (jdId) {
+      const targetJdId = jdId ? parseInt(jdId) : selectedJdId;
+      if (targetJdId) {
         try {
-          const response = await questionApi.listByJd(parseInt(jdId));
+          const response = await questionApi.listByJd(targetJdId);
           setAvailableQuestions(response.data || []);
         } catch (err) {
           console.error('Failed to load questions:', err);
@@ -66,12 +98,13 @@ export default function InterviewPage() {
       }
     };
     loadQuestions();
-  }, [jdId]);
+  }, [jdId, selectedJdId]);
 
   const currentQna = session?.qnaList?.[currentQuestionIndex];
 
   const handleStart = useCallback(async () => {
-    if (!jdId) {
+    const targetJdId = jdId ? parseInt(jdId) : selectedJdId;
+    if (!targetJdId) {
       setError('JD를 선택해주세요.');
       return;
     }
@@ -80,7 +113,8 @@ export default function InterviewPage() {
     setError(null);
 
     try {
-      const questions = availableQuestions.slice(0, 5).map(q => ({
+      const selectedQuestions = availableQuestions.slice(0, 5);
+      const questions = selectedQuestions.map(q => ({
         questionType: q.questionType,
         questionText: q.questionText,
       }));
@@ -91,8 +125,17 @@ export default function InterviewPage() {
         return;
       }
 
+      // Store questions with their skill categories for statistics
+      const questionsWithCat = selectedQuestions.map(q => ({
+        questionType: q.questionType,
+        questionText: q.questionText,
+        skillCategory: q.skillCategory || q.questionType,
+      }));
+      setQuestionsWithCategory(questionsWithCat);
+      questionsWithCategoryRef.current = questionsWithCat;
+
       const response = await interviewApi.start({
-        jdId: parseInt(jdId),
+        jdId: targetJdId,
         questions,
         interviewType: 'mixed',
       });
@@ -105,7 +148,7 @@ export default function InterviewPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [jdId, availableQuestions, setSession]);
+  }, [jdId, selectedJdId, availableQuestions, setSession]);
 
   const handleSubmitAnswer = async () => {
     if (!answer.trim() || !currentQna || !session) return;
@@ -123,58 +166,95 @@ export default function InterviewPage() {
         answerText: answer,
       });
 
-      // Connect to SSE for streaming feedback (pass token as query param since EventSource doesn't support headers)
-      const token = useAuthStore.getState().accessToken;
-      const streamUrl = feedbackApi.streamUrl(session.id, {
-        token: token || undefined,
-        question: currentQna?.questionText,
-        answer: answer,
-      });
-      const eventSource = new EventSource(streamUrl);
-      eventSourceRef.current = eventSource;
-
+      // Use POST for streaming feedback (supports long answers without URL length limits)
       let feedbackData: QnaFeedback | null = null;
+      const questionSkillCategory = questionsWithCategoryRef.current[currentQuestionIndex]?.skillCategory || currentQna.questionType || 'general';
 
-      // Handle 'feedback' event from backend
-      eventSource.addEventListener('feedback', (event: MessageEvent) => {
-        const data = JSON.parse(event.data);
-        feedbackData = {
-          score: data.score || 75,
-          strengths: data.strengths || [],
-          improvements: data.improvements || [],
-          tips: data.tips ? [data.tips] : [],
-        };
-        // Display overall comment as streaming feedback
-        if (data.overallComment) {
-          setStreamingFeedback(data.overallComment);
-        }
-      });
-
-      // Handle 'complete' event from backend
-      eventSource.addEventListener('complete', () => {
-        eventSource.close();
-        setIsStreaming(false);
-        if (feedbackData) {
-          setFeedback(feedbackData);
-          setResults((prev) => [...prev, { qna: currentQna, feedback: feedbackData! }]);
-        }
-      });
-
-      eventSource.onerror = () => {
-        eventSource.close();
-        setIsStreaming(false);
-        // If we didn't get feedback from SSE, create a placeholder
-        if (!feedbackData) {
+      await feedbackApi.streamPost(
+        session.id,
+        {
+          qnaId: currentQna?.id,
+          question: currentQna?.questionText,
+          answer: answer,
+        },
+        // onFeedback callback
+        (data) => {
           feedbackData = {
-            score: 70,
-            strengths: ['답변이 제출되었습니다'],
-            improvements: ['피드백을 불러오는 중 오류가 발생했습니다'],
-            tips: [],
+            score: (data.score as number) || 75,
+            strengths: (data.strengths as string[]) || [],
+            improvements: (data.improvements as string[]) || [],
+            tips: Array.isArray(data.tips) ? data.tips as string[] : (data.tips ? [data.tips as string] : []),
           };
-          setFeedback(feedbackData);
-          setResults((prev) => [...prev, { qna: currentQna, feedback: feedbackData! }]);
+          // Display overall comment as streaming feedback
+          if (data.overallComment) {
+            setStreamingFeedback(data.overallComment as string);
+          }
+        },
+        // onComplete callback
+        async () => {
+          setIsStreaming(false);
+          if (feedbackData && session) {
+            setFeedback(feedbackData);
+            setResults((prev) => [...prev, { qna: currentQna, feedback: feedbackData!, skillCategory: questionSkillCategory }]);
+
+            // Save feedback to interview-service for persistence
+            try {
+              await interviewApi.updateFeedback(session.id, currentQuestionIndex + 1, feedbackData);
+            } catch (err) {
+              console.error('Failed to save feedback:', err);
+            }
+
+            // Record statistics immediately (don't wait until interview end)
+            try {
+              await statisticsApi.record({
+                skillCategory: questionSkillCategory,
+                isCorrect: feedbackData.score >= 60,
+                score: feedbackData.score,
+                weakPoint: feedbackData.score < 60 ? feedbackData.improvements[0] : undefined,
+              });
+            } catch (statsErr) {
+              console.error('Failed to record statistics:', statsErr);
+            }
+          }
+        },
+        // onError callback
+        async (error) => {
+          console.error('SSE error:', error);
+          setIsStreaming(false);
+          // If we didn't get feedback from SSE, create a placeholder
+          if (!feedbackData) {
+            feedbackData = {
+              score: 70,
+              strengths: ['답변이 제출되었습니다'],
+              improvements: ['피드백을 불러오는 중 오류가 발생했습니다'],
+              tips: [],
+            };
+            setFeedback(feedbackData);
+            setResults((prev) => [...prev, { qna: currentQna, feedback: feedbackData!, skillCategory: questionSkillCategory }]);
+
+            // Save fallback feedback
+            if (session) {
+              try {
+                await interviewApi.updateFeedback(session.id, currentQuestionIndex + 1, feedbackData);
+              } catch (err) {
+                console.error('Failed to save fallback feedback:', err);
+              }
+
+              // Record statistics even on error (so it counts in stats)
+              try {
+                await statisticsApi.record({
+                  skillCategory: questionSkillCategory,
+                  isCorrect: feedbackData.score >= 60,
+                  score: feedbackData.score,
+                  weakPoint: feedbackData.score < 60 ? feedbackData.improvements[0] : undefined,
+                });
+              } catch (statsErr) {
+                console.error('Failed to record statistics on error:', statsErr);
+              }
+            }
+          }
         }
-      };
+      );
 
     } catch (err) {
       console.error('Submit answer error:', err);
@@ -186,15 +266,6 @@ export default function InterviewPage() {
     }
   };
 
-  // Cleanup event source on unmount
-  useEffect(() => {
-    return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
-    };
-  }, []);
-
   const handleNext = async () => {
     if (currentQuestionIndex < (session?.totalQuestions || 0) - 1) {
       nextQuestion();
@@ -203,7 +274,7 @@ export default function InterviewPage() {
       setShowFeedback(false);
       setStreamingFeedback('');
     } else {
-      // Complete the interview
+      // Complete the interview (statistics already recorded per question)
       if (session) {
         try {
           await interviewApi.complete(session.id);
@@ -226,6 +297,8 @@ export default function InterviewPage() {
     setStreamingFeedback('');
     setResults([]);
     setError(null);
+    setQuestionsWithCategory([]);
+    questionsWithCategoryRef.current = [];
   };
 
   // Start screen
@@ -280,9 +353,66 @@ export default function InterviewPage() {
               )}
 
               {!jdId && (
-                <div className="mb-6 p-4 bg-accent-blue/10 border-2 border-accent-blue flex items-center gap-3 max-w-md mx-auto">
-                  <AlertCircle className="w-5 h-5 text-accent-blue shrink-0" />
-                  <p className="text-sm text-accent-blue">JD 분석 페이지에서 질문을 생성한 후 면접을 시작해주세요.</p>
+                <div className="mb-8 max-w-lg mx-auto">
+                  <h3 className="text-sm font-semibold uppercase tracking-wider text-neutral-500 mb-4 flex items-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    JD 선택
+                  </h3>
+                  {isLoadingJds ? (
+                    <div className="p-8 text-center">
+                      <Loader2 className="w-6 h-6 animate-spin mx-auto text-neutral-400" />
+                      <p className="text-sm text-neutral-500 mt-2">JD 목록 불러오는 중...</p>
+                    </div>
+                  ) : jdList.length === 0 ? (
+                    <div className="p-6 bg-neutral-50 border-2 border-dashed border-neutral-300 text-center">
+                      <FileText className="w-8 h-8 mx-auto text-neutral-300 mb-2" />
+                      <p className="text-sm text-neutral-500 mb-4">등록된 JD가 없습니다</p>
+                      <Link href="/jd">
+                        <Button size="sm" variant="secondary">
+                          JD 등록하러 가기
+                        </Button>
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {jdList.map((jd) => (
+                        <button
+                          key={jd.id}
+                          onClick={() => setSelectedJdId(jd.id)}
+                          className={`w-full p-4 text-left border-2 transition-all ${
+                            selectedJdId === jd.id
+                              ? 'border-ink bg-accent-lime/20'
+                              : 'border-neutral-200 hover:border-neutral-400 bg-white'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 border-2 border-ink flex items-center justify-center font-display ${
+                              selectedJdId === jd.id ? 'bg-accent-lime' : 'bg-white'
+                            }`}>
+                              {jd.companyName.charAt(0)}
+                            </div>
+                            <div className="flex-1">
+                              <h4 className="font-semibold">{jd.companyName}</h4>
+                              <p className="text-sm text-neutral-500">{jd.position}</p>
+                            </div>
+                            {selectedJdId === jd.id && (
+                              <CheckCircle2 className="w-5 h-5 text-ink" />
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {selectedJdId && availableQuestions.length === 0 && (
+                    <div className="mt-4 p-4 bg-accent-blue/10 border-2 border-accent-blue">
+                      <p className="text-sm text-accent-blue">
+                        선택한 JD에 생성된 질문이 없습니다.
+                        <Link href={`/jd`} className="underline font-semibold ml-1">
+                          JD 분석 페이지에서 질문을 생성해주세요.
+                        </Link>
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -290,7 +420,7 @@ export default function InterviewPage() {
                 size="lg"
                 onClick={handleStart}
                 leftIcon={isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5" />}
-                disabled={isLoading || !jdId || availableQuestions.length === 0}
+                disabled={isLoading || (!jdId && !selectedJdId) || availableQuestions.length === 0}
               >
                 {isLoading ? '면접 준비 중...' : '면접 시작하기'}
               </Button>
@@ -369,9 +499,11 @@ export default function InterviewPage() {
                 >
                   다시 연습하기
                 </Button>
-                <Button rightIcon={<ArrowRight className="w-4 h-4" />}>
-                  상세 리포트 보기
-                </Button>
+                <Link href={session ? `/interview/${session.id}` : '/interview'}>
+                  <Button rightIcon={<ArrowRight className="w-4 h-4" />}>
+                    상세 리포트 보기
+                  </Button>
+                </Link>
               </div>
             </Card>
           </motion.div>

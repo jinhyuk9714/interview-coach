@@ -50,7 +50,8 @@ public class QuestionGenerationService {
                 request.getDifficulty()
         );
 
-        // 생성된 질문 저장
+        // 기존 질문 삭제 후 새 질문 저장
+        questionRepository.deleteByJdId(jd.getId());
         List<GeneratedQuestion> questions = results.stream()
                 .map(r -> GeneratedQuestion.builder()
                         .jdId(jd.getId())

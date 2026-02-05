@@ -102,16 +102,20 @@ public class InterviewService {
 
         qna.submitAnswer(request.getAnswerText());
 
-        // Mock 피드백 생성 (실제로는 feedback-service에서 처리)
-        Map<String, Object> mockFeedback = Map.of(
-                "score", 75,
-                "strengths", List.of("명확한 설명", "구체적인 예시 제시"),
-                "improvements", List.of("기술적 깊이 보완 필요", "STAR 기법 활용 권장"),
-                "tips", "답변 시 구체적인 숫자와 결과를 포함하면 더 설득력이 있습니다."
-        );
-        qna.setFeedback(mockFeedback);
-
+        // 피드백은 feedback-service에서 SSE로 전송 후 별도 API로 저장됨
         log.info("Submitted answer: sessionId={}, questionOrder={}", sessionId, request.getQuestionOrder());
+
+        return QnaResponse.from(qna);
+    }
+
+    @Transactional
+    public QnaResponse updateFeedback(Long sessionId, Integer questionOrder, Map<String, Object> feedback) {
+        InterviewQna qna = qnaRepository.findBySessionIdAndQuestionOrder(sessionId, questionOrder)
+                .orElseThrow(() -> new QnaNotFoundException(sessionId, questionOrder));
+
+        qna.setFeedback(feedback);
+        log.info("Updated feedback: sessionId={}, questionOrder={}, score={}",
+                sessionId, questionOrder, feedback.get("score"));
 
         return QnaResponse.from(qna);
     }
@@ -130,6 +134,7 @@ public class InterviewService {
         BigDecimal avgScore = calculateAvgScore(qnaList);
 
         session.complete(avgScore);
+        sessionRepository.save(session);  // 명시적 저장
 
         log.info("Completed interview: sessionId={}, avgScore={}", sessionId, avgScore);
 

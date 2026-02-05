@@ -52,4 +52,13 @@ public class InterviewController {
         InterviewSessionResponse response = interviewService.completeInterview(id);
         return ResponseEntity.ok(response);
     }
+
+    @PutMapping("/{id}/qna/{questionOrder}/feedback")
+    public ResponseEntity<QnaResponse> updateFeedback(
+            @PathVariable Long id,
+            @PathVariable Integer questionOrder,
+            @RequestBody java.util.Map<String, Object> feedback) {
+        QnaResponse response = interviewService.updateFeedback(id, questionOrder, feedback);
+        return ResponseEntity.ok(response);
+    }
 }
