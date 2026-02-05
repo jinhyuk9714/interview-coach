@@ -19,6 +19,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - interview-coach-network
 
   # Redis Cache
   redis:
@@ -33,6 +35,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - interview-coach-network
 
   # ChromaDB Vector Store
   chromadb:
@@ -44,6 +48,12 @@ services:
       - chroma_data:/chroma/chroma
     environment:
       - ANONYMIZED_TELEMETRY=false
+    networks:
+      - interview-coach-network
+
+networks:
+  interview-coach-network:
+    driver: bridge
 
 volumes:
   postgres_data:

@@ -1,0 +1,13 @@
+apiVersion: 1
+
+providers:
+  - name: 'Interview Coach Dashboards'
+    orgId: 1
+    folder: 'Interview Coach'
+    folderUid: 'interview-coach'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards

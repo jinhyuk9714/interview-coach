@@ -1,0 +1,13 @@
+dependencies {
+    // Spring Data JPA
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+    // PostgreSQL
+    runtimeOnly 'org.postgresql:postgresql'
+
+    // Redis
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+
+    // SSE (WebFlux for streaming)
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+}

@@ -1,0 +1,178 @@
+{
+  "description": "Performance thresholds by service and scenario",
+  "global": {
+    "http_req_failed": {
+      "rate": 0.01,
+      "description": "Overall error rate should be less than 1%"
+    },
+    "http_req_duration": {
+      "p95": 500,
+      "p99": 1000,
+      "description": "95th percentile response time should be under 500ms"
+    }
+  },
+  "services": {
+    "gateway": {
+      "http_req_duration": {
+        "p95": 100,
+        "p99": 200
+      },
+      "description": "API Gateway should route quickly"
+    },
+    "user-service": {
+      "login": {
+        "http_req_duration": {
+          "p95": 200,
+          "p99": 500
+        },
+        "description": "Login should be fast for good UX"
+      },
+      "register": {
+        "http_req_duration": {
+          "p95": 500,
+          "p99": 1000
+        }
+      },
+      "profile": {
+        "http_req_duration": {
+          "p95": 100,
+          "p99": 200
+        }
+      }
+    },
+    "question-service": {
+      "jd-analysis": {
+        "http_req_duration": {
+          "p95": 30000,
+          "p99": 60000
+        },
+        "http_req_failed": {
+          "rate": 0.1
+        },
+        "description": "LLM calls have high latency, allow up to 10% failure"
+      },
+      "rag-search": {
+        "http_req_duration": {
+          "p95": 2000,
+          "p99": 5000
+        },
+        "description": "Vector search with caching"
+      },
+      "list-questions": {
+        "http_req_duration": {
+          "p95": 200,
+          "p99": 500
+        }
+      },
+      "search-questions": {
+        "http_req_duration": {
+          "p95": 500,
+          "p99": 1000
+        }
+      }
+    },
+    "interview-service": {
+      "create-session": {
+        "http_req_duration": {
+          "p95": 300,
+          "p99": 500
+        }
+      },
+      "get-session": {
+        "http_req_duration": {
+          "p95": 100,
+          "p99": 200
+        }
+      },
+      "submit-answer": {
+        "http_req_duration": {
+          "p95": 500,
+          "p99": 1000
+        }
+      }
+    },
+    "feedback-service": {
+      "streaming": {
+        "sse_connection_time": {
+          "p95": 1000
+        },
+        "sse_first_event_time": {
+          "p95": 5000
+        },
+        "sse_total_stream_time": {
+          "p95": 60000
+        },
+        "description": "SSE streaming for real-time feedback"
+      },
+      "statistics": {
+        "http_req_duration": {
+          "p95": 1000,
+          "p99": 2000
+        },
+        "description": "Statistics may involve aggregation queries"
+      }
+    }
+  },
+  "scenarios": {
+    "smoke": {
+      "http_req_failed": {
+        "rate": 0.01
+      },
+      "checks": {
+        "rate": 0.99
+      },
+      "description": "Smoke test should have near-zero failures"
+    },
+    "load": {
+      "http_req_failed": {
+        "rate": 0.01
+      },
+      "checks": {
+        "rate": 0.95
+      }
+    },
+    "stress": {
+      "http_req_failed": {
+        "rate": 0.1
+      },
+      "checks": {
+        "rate": 0.8
+      },
+      "description": "Stress test allows higher failure rate to find breaking point"
+    },
+    "spike": {
+      "http_req_failed": {
+        "rate": 0.15
+      },
+      "checks": {
+        "rate": 0.75
+      },
+      "description": "Spike test allows degradation during traffic surge"
+    },
+    "soak": {
+      "http_req_failed": {
+        "rate": 0.02
+      },
+      "checks": {
+        "rate": 0.95
+      },
+      "description": "Soak test checks for memory leaks over time"
+    }
+  },
+  "slo": {
+    "availability": {
+      "target": 99.9,
+      "description": "99.9% availability SLO"
+    },
+    "latency_p95": {
+      "target": 500,
+      "unit": "ms",
+      "description": "95th percentile latency SLO"
+    },
+    "error_rate": {
+      "target": 0.1,
+      "unit": "percent",
+      "description": "Error rate SLO"
+    }
+  }
+}

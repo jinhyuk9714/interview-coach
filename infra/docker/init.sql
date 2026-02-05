@@ -63,9 +63,27 @@ CREATE TABLE IF NOT EXISTS user_statistics (
     UNIQUE(user_id, skill_category)
 );
 
+-- Generated Questions table
+CREATE TABLE IF NOT EXISTS generated_questions (
+    id BIGSERIAL PRIMARY KEY,
+    jd_id BIGINT REFERENCES job_descriptions(id) ON DELETE CASCADE,
+    question_type VARCHAR(50),
+    skill_category VARCHAR(50),
+    question_text TEXT NOT NULL,
+    hint TEXT,
+    ideal_answer TEXT,
+    difficulty INT DEFAULT 3,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
 -- Indexes
 CREATE INDEX idx_jd_user_id ON job_descriptions(user_id);
 CREATE INDEX idx_session_user_id ON interview_sessions(user_id);
 CREATE INDEX idx_session_status ON interview_sessions(status);
 CREATE INDEX idx_qna_session_id ON interview_qna(session_id);
 CREATE INDEX idx_stats_user_id ON user_statistics(user_id);
+CREATE INDEX idx_generated_questions_jd_id ON generated_questions(jd_id);
+
+-- 의도적으로 누락된 인덱스 (3주차 최적화 대상)
+-- CREATE INDEX idx_session_started_at ON interview_sessions(started_at);
+-- CREATE INDEX idx_session_user_started ON interview_sessions(user_id, started_at DESC);

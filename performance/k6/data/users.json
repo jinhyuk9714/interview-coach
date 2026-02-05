@@ -1,0 +1,34 @@
+{
+  "testUsers": [
+    {
+      "email": "loadtest1@example.com",
+      "password": "Test1234!",
+      "name": "Load Test User 1"
+    },
+    {
+      "email": "loadtest2@example.com",
+      "password": "Test1234!",
+      "name": "Load Test User 2"
+    },
+    {
+      "email": "loadtest3@example.com",
+      "password": "Test1234!",
+      "name": "Load Test User 3"
+    },
+    {
+      "email": "loadtest4@example.com",
+      "password": "Test1234!",
+      "name": "Load Test User 4"
+    },
+    {
+      "email": "loadtest5@example.com",
+      "password": "Test1234!",
+      "name": "Load Test User 5"
+    }
+  ],
+  "adminUser": {
+    "email": "admin@example.com",
+    "password": "Admin1234!",
+    "name": "Admin User"
+  }
+}
