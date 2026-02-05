@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { motion } from 'motion/react';
 import { Button, Card, Tag, ScoreRing } from '@/components/ui';
 import { interviewApi, jdApi } from '@/lib/api';
+import { formatDate } from '@/lib/utils';
 import {
   ArrowLeft,
   Calendar,
@@ -151,11 +152,7 @@ export default function InterviewDetailPage() {
               <div className="flex items-center gap-4 text-sm text-neutral-500">
                 <span className="flex items-center gap-1">
                   <Calendar className="w-4 h-4" />
-                  {new Date(session.startedAt).toLocaleDateString('ko-KR', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  })}
+                  {formatDate(session.startedAt)}
                 </span>
                 <Tag variant={session.status === 'completed' ? 'lime' : 'default'}>
                   {session.status === 'completed' ? '완료' : session.status === 'in_progress' ? '진행중' : '취소됨'}

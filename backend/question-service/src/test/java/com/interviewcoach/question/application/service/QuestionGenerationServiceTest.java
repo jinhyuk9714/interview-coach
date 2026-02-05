@@ -9,6 +9,7 @@ import com.interviewcoach.question.domain.repository.GeneratedQuestionRepository
 import com.interviewcoach.question.domain.repository.JobDescriptionRepository;
 import com.interviewcoach.question.exception.JdNotFoundException;
 import com.interviewcoach.question.infrastructure.llm.LlmClient;
+import com.interviewcoach.question.infrastructure.rag.QuestionEmbeddingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -45,6 +46,9 @@ class QuestionGenerationServiceTest {
     @Mock
     private LlmClient llmClient;
 
+    @Mock
+    private QuestionEmbeddingService embeddingService;
+
     @InjectMocks
     private QuestionGenerationService questionGenerationService;
 
@@ -77,6 +81,7 @@ class QuestionGenerationServiceTest {
 
             List<GeneratedQuestion> savedQuestions = createSavedQuestions(mockResults, JD_ID);
 
+            given(embeddingService.isAvailable()).willReturn(false);
             given(jdRepository.findById(JD_ID)).willReturn(Optional.of(jd));
             given(llmClient.generateQuestions(anyString(), anyList(), anyString(), anyInt(), anyInt()))
                     .willReturn(mockResults);
@@ -113,6 +118,7 @@ class QuestionGenerationServiceTest {
                             "힌트 1", "이상적 답변 1", 3)
             );
 
+            given(embeddingService.isAvailable()).willReturn(false);
             given(jdRepository.findById(JD_ID)).willReturn(Optional.of(jd));
             given(llmClient.generateQuestions(anyString(), anyList(), anyString(), anyInt(), anyInt()))
                     .willReturn(mockResults);
@@ -156,6 +162,7 @@ class QuestionGenerationServiceTest {
                             "mixed", "Java", "질문", "힌트", "답변", 3)
             );
 
+            given(embeddingService.isAvailable()).willReturn(false);
             given(jdRepository.findById(JD_ID)).willReturn(Optional.of(jd));
             given(llmClient.generateQuestions(anyString(), anyList(), anyString(), anyInt(), anyInt()))
                     .willReturn(mockResults);

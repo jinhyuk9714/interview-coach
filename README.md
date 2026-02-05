@@ -78,8 +78,9 @@ flowchart TB
 - ChromaDB - 벡터 임베딩 저장 (RAG)
 
 ### AI/LLM
-- Claude API (claude-3-sonnet) - Primary
+- Claude API (claude-sonnet-4-20250514) - Primary
 - OpenAI API (Fallback 구성 가능)
+- AllMiniLmL6V2 - 로컬 임베딩 모델 (RAG)
 
 ### Frontend
 - Next.js 14 (App Router)
@@ -149,11 +150,24 @@ interview-coach/
 CLAUDE_API_KEY=your-api-key
 ```
 
-### 실행
+### 실행 (Docker Compose - 권장)
 
 ```bash
-# 1. 인프라 실행 (PostgreSQL, Redis, ChromaDB)
-cd infra/docker && docker-compose up -d
+# 전체 스택 한 번에 실행 (인프라 + 백엔드 + 프론트엔드)
+cd infra/docker
+cp .env.example .env  # API 키 설정 (선택)
+docker-compose up -d --build
+
+# 접속
+# - 프론트엔드: http://localhost:3000
+# - API Gateway: http://localhost:8080
+```
+
+### 실행 (개발 모드)
+
+```bash
+# 1. 인프라만 실행 (PostgreSQL, Redis, ChromaDB)
+cd infra/docker && docker-compose up -d postgres redis chromadb
 
 # 2. 백엔드 빌드 및 실행
 cd backend && ./gradlew build
@@ -413,8 +427,9 @@ erDiagram
   - [x] 단위 테스트 (JUnit 5, Mockito)
   - [x] SSE 스트리밍 안정화
   - [x] 버그 수정 및 UX 개선
-- [ ] **Phase 4: 고도화**
-  - [ ] RAG 파이프라인 (ChromaDB)
+- [x] **Phase 4: 고도화**
+  - [x] RAG 파이프라인 (ChromaDB + LangChain4j)
+  - [x] Docker Compose 전체 스택 (한 번에 실행)
   - [ ] 꼬리 질문 기능
   - [ ] 취약점 분석 & 추천
 - [ ] **Phase 5: 배포**
@@ -430,6 +445,9 @@ erDiagram
 | 마이크로서비스 인증 | Gateway에서 JWT 검증 → X-User-Id 헤더 전달 |
 | LLM 비용 최적화 | Mock 모드 지원, 캐싱 (추후 Redis) |
 | 성능 측정 | k6 + InfluxDB + Grafana 대시보드 |
+| 질문 중복 방지 | RAG (ChromaDB + 로컬 임베딩 모델) |
+| 컨테이너 시간대 | UTC 날짜 파싱 유틸리티로 KST 변환 |
+| 새로고침 로그아웃 | Zustand hydration 상태 추적 |
 
 ## 라이선스
 

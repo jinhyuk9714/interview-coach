@@ -3,6 +3,7 @@ package com.interviewcoach.question.infrastructure.llm;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.interviewcoach.question.infrastructure.rag.SimilarQuestionResult;
 import dev.langchain4j.model.anthropic.AnthropicChatModel;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import lombok.extern.slf4j.Slf4j;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
@@ -133,6 +135,111 @@ public class ClaudeLlmClient implements LlmClient {
         } catch (Exception e) {
             log.error("Failed to generate questions with Claude: {}", e.getMessage());
             return createMockQuestions(questionType, count, difficulty);
+        }
+    }
+
+    @Override
+    public List<GeneratedQuestionResult> generateQuestionsWithContext(
+            String jdText,
+            List<String> skills,
+            String questionType,
+            int count,
+            int difficulty,
+            List<SimilarQuestionResult> similarQuestions) {
+
+        // 유사 질문이 없으면 기존 메서드 사용
+        if (similarQuestions == null || similarQuestions.isEmpty()) {
+            log.debug("No similar questions provided, using standard generation");
+            return generateQuestions(jdText, skills, questionType, count, difficulty);
+        }
+
+        if (chatModel == null) {
+            return createMockQuestions(questionType, count, difficulty);
+        }
+
+        log.info("Generating questions with RAG context: {} similar questions", similarQuestions.size());
+
+        String difficultyDesc = switch (difficulty) {
+            case 1 -> "매우 쉬움 (신입 레벨)";
+            case 2 -> "쉬움 (1-2년차)";
+            case 3 -> "보통 (3-5년차)";
+            case 4 -> "어려움 (5-7년차)";
+            case 5 -> "매우 어려움 (시니어/리드)";
+            default -> "보통";
+        };
+
+        String typeInstruction = switch (questionType) {
+            case "technical" -> "기술적인 질문만 생성해주세요 (코딩, 시스템 설계, 알고리즘 등)";
+            case "behavioral" -> "행동 면접 질문만 생성해주세요 (경험, 상황 대처, 팀워크 등)";
+            default -> "기술 질문과 행동 면접 질문을 섞어서 생성해주세요";
+        };
+
+        // 유사 질문을 문자열로 변환
+        String similarQuestionsText = similarQuestions.stream()
+                .map(sq -> String.format("- [%s/%s] %s",
+                        sq.getQuestionType(),
+                        sq.getSkillCategory(),
+                        sq.getContent()))
+                .collect(Collectors.joining("\n"));
+
+        String prompt = """
+            다음 채용 공고와 필요 기술을 바탕으로 면접 질문을 생성해주세요.
+
+            JD 내용:
+            %s
+
+            필요 기술: %s
+
+            요청 사항:
+            - %s
+            - 난이도: %s
+            - 질문 개수: %d개
+
+            ## 참고할 기존 질문 (중복 방지용)
+            다음은 유사한 JD에서 사용된 기존 면접 질문들입니다.
+            이 질문들과 **중복되지 않는** 새롭고 창의적인 질문을 생성해주세요.
+            단, 이 질문들의 주제와 깊이를 참고하여 일관된 품질을 유지해주세요.
+
+            %s
+
+            다음 JSON 배열 형식으로 응답해주세요:
+            [
+                {
+                    "questionType": "technical 또는 behavioral",
+                    "skillCategory": "아래 카테고리 중 하나만 선택",
+                    "questionText": "면접 질문",
+                    "hint": "답변 힌트 (1-2문장)",
+                    "idealAnswer": "모범 답변 요약 (2-3문장)",
+                    "difficulty": %d
+                }
+            ]
+
+            skillCategory는 반드시 다음 중 하나만 사용하세요:
+            - 기술역량 (코딩, 알고리즘, 자료구조, 프로그래밍 언어 관련)
+            - 시스템설계 (아키텍처, 인프라, 확장성, 성능 관련)
+            - 문제해결 (트러블슈팅, 디버깅, 분석력 관련)
+            - 협업 (팀워크, 커뮤니케이션, 리더십 관련)
+            - 프로젝트경험 (실제 프로젝트 경험, 성과 관련)
+
+            JSON 배열만 응답하고 다른 텍스트는 포함하지 마세요.
+            """.formatted(
+                jdText,
+                String.join(", ", skills),
+                typeInstruction,
+                difficultyDesc,
+                count,
+                similarQuestionsText,
+                difficulty);
+
+        try {
+            String response = chatModel.generate(prompt);
+            List<GeneratedQuestionResult> results = parseQuestionsResponse(response);
+            log.info("Generated {} questions with RAG context", results.size());
+            return results;
+        } catch (Exception e) {
+            log.error("Failed to generate questions with RAG context: {}", e.getMessage());
+            // Fallback to standard generation
+            return generateQuestions(jdText, skills, questionType, count, difficulty);
         }
     }
 
