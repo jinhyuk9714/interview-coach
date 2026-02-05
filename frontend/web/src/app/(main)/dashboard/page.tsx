@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Loader2
 } from 'lucide-react';
+import { formatDate, parseUTCDate } from '@/lib/utils';
 
 interface Interview {
   id: number;
@@ -98,7 +99,7 @@ export default function DashboardPage() {
             : interviews.filter((i: Interview) => {
                 const weekAgo = new Date();
                 weekAgo.setDate(weekAgo.getDate() - 7);
-                return new Date(i.startedAt) > weekAgo;
+                return parseUTCDate(i.startedAt) > weekAgo;
               }).length;
 
           setStatistics({
@@ -122,7 +123,7 @@ export default function DashboardPage() {
             totalInterviews: interviews.length,
             avgScore,
             totalJds,
-            weeklyInterviews: interviews.filter(i => new Date(i.startedAt) > weekAgo).length,
+            weeklyInterviews: interviews.filter(i => parseUTCDate(i.startedAt) > weekAgo).length,
             weakPoints: [],
           });
 
@@ -281,7 +282,7 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-4">
                         <div className="text-right hidden sm:block">
                           <p className="text-xs text-neutral-400 font-mono">
-                            {new Date(interview.startedAt).toLocaleDateString('ko-KR')}
+                            {formatDate(interview.startedAt)}
                           </p>
                         </div>
                         {interview.status === 'completed' && (interview.avgScore || interview.score) ? (

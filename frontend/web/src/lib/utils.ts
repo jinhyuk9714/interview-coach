@@ -4,8 +4,19 @@ export function cn(...inputs: ClassValue[]) {
   return clsx(inputs);
 }
 
+/**
+ * 백엔드에서 받은 날짜 문자열을 UTC로 파싱
+ * 백엔드가 UTC로 저장하지만 'Z' 없이 보내는 경우를 처리
+ */
+export function parseUTCDate(dateString: string): Date {
+  if (!dateString.endsWith('Z') && !dateString.includes('+')) {
+    return new Date(dateString + 'Z');
+  }
+  return new Date(dateString);
+}
+
 export function formatDate(dateString: string): string {
-  const date = new Date(dateString);
+  const date = parseUTCDate(dateString);
   return new Intl.DateTimeFormat('ko-KR', {
     year: 'numeric',
     month: 'long',
@@ -14,7 +25,7 @@ export function formatDate(dateString: string): string {
 }
 
 export function formatDateTime(dateString: string): string {
-  const date = new Date(dateString);
+  const date = parseUTCDate(dateString);
   return new Intl.DateTimeFormat('ko-KR', {
     year: 'numeric',
     month: 'short',
@@ -24,8 +35,16 @@ export function formatDateTime(dateString: string): string {
   }).format(date);
 }
 
+export function formatTime(dateString: string): string {
+  const date = parseUTCDate(dateString);
+  return new Intl.DateTimeFormat('ko-KR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
 export function formatRelativeTime(dateString: string): string {
-  const date = new Date(dateString);
+  const date = parseUTCDate(dateString);
   const now = new Date();
   const diff = now.getTime() - date.getTime();
 

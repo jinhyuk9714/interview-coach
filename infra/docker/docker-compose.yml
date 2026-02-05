@@ -1,6 +1,8 @@
-version: '3.8'
-
 services:
+  # ============================================
+  # Infrastructure
+  # ============================================
+
   # PostgreSQL Database
   postgres:
     image: postgres:16-alpine
@@ -38,9 +40,9 @@ services:
     networks:
       - interview-coach-network
 
-  # ChromaDB Vector Store
+  # ChromaDB Vector Store (v1 API 지원 버전)
   chromadb:
-    image: chromadb/chroma:latest
+    image: chromadb/chroma:0.5.23
     container_name: interview-coach-chroma
     ports:
       - "8000:8000"
@@ -48,8 +50,164 @@ services:
       - chroma_data:/chroma/chroma
     environment:
       - ANONYMIZED_TELEMETRY=false
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/heartbeat || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - interview-coach-network
+
+  # ============================================
+  # Backend Services
+  # ============================================
+
+  user-service:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+      target: user-service
+    container_name: interview-coach-user
+    ports:
+      - "8081:8081"
+    environment:
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/interview_coach
+      - DATABASE_USERNAME=postgres
+      - DATABASE_PASSWORD=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=${JWT_SECRET:-default-jwt-secret-change-in-production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - interview-coach-network
+    restart: unless-stopped
+
+  question-service:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+      target: question-service
+    container_name: interview-coach-question
+    ports:
+      - "8082:8082"
+    environment:
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/interview_coach
+      - DATABASE_USERNAME=postgres
+      - DATABASE_PASSWORD=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      chromadb:
+        condition: service_started
+    networks:
+      - interview-coach-network
+    restart: unless-stopped
+
+  interview-service:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+      target: interview-service
+    container_name: interview-coach-interview
+    ports:
+      - "8083:8083"
+    environment:
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/interview_coach
+      - DATABASE_USERNAME=postgres
+      - DATABASE_PASSWORD=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - interview-coach-network
+    restart: unless-stopped
+
+  feedback-service:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+      target: feedback-service
+    container_name: interview-coach-feedback
+    ports:
+      - "8084:8084"
+    environment:
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/interview_coach
+      - DATABASE_USERNAME=postgres
+      - DATABASE_PASSWORD=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - interview-coach-network
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+      target: gateway
+    container_name: interview-coach-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - USER_SERVICE_URL=http://user-service:8081
+      - QUESTION_SERVICE_URL=http://question-service:8082
+      - INTERVIEW_SERVICE_URL=http://interview-service:8083
+      - FEEDBACK_SERVICE_URL=http://feedback-service:8084
+      - JWT_SECRET=${JWT_SECRET:-default-jwt-secret-change-in-production}
+    depends_on:
+      - user-service
+      - question-service
+      - interview-service
+      - feedback-service
+    networks:
+      - interview-coach-network
+    restart: unless-stopped
+
+  # ============================================
+  # Frontend
+  # ============================================
+
+  frontend:
+    build:
+      context: ../../frontend/web
+      dockerfile: Dockerfile
+      args:
+        # 빌드 시: 브라우저에서 접근할 URL (localhost)
+        - NEXT_PUBLIC_API_URL=http://localhost:8080
+    container_name: interview-coach-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      # 런타임: rewrites 프록시용 (컨테이너 내부 통신)
+      - NEXT_PUBLIC_API_URL=http://gateway:8080
+    depends_on:
+      - gateway
+    networks:
+      - interview-coach-network
+    restart: unless-stopped
 
 networks:
   interview-coach-network:

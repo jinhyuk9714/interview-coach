@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { motion } from 'motion/react';
 import { Card, Button, Tag, ScoreRing } from '@/components/ui';
 import { interviewApi } from '@/lib/api';
+import { formatDate, formatTime } from '@/lib/utils';
 import {
   Calendar,
   Clock,
@@ -52,23 +53,6 @@ export default function HistoryPage() {
 
     loadInterviews();
   }, [user, accessToken]);
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  };
-
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('ko-KR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
 
   const getStatusLabel = (status: string) => {
     switch (status.toLowerCase()) {

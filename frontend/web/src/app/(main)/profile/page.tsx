@@ -5,6 +5,7 @@ import { motion } from 'motion/react';
 import { Button, Card, Input } from '@/components/ui';
 import { useAuthStore } from '@/stores/auth';
 import { userApi } from '@/lib/api';
+import { formatDate } from '@/lib/utils';
 import {
   User,
   Mail,
@@ -158,7 +159,7 @@ export default function ProfilePage() {
                   <Calendar className="w-4 h-4" />
                   <span className="text-xs">
                     {user?.createdAt
-                      ? `${new Date(user.createdAt).toLocaleDateString('ko-KR')} 가입`
+                      ? `${formatDate(user.createdAt)} 가입`
                       : '가입일 정보 없음'}
                   </span>
                 </div>

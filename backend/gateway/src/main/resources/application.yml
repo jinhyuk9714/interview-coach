@@ -11,6 +11,17 @@ spring:
 jwt:
   secret: ${JWT_SECRET:your-secret-key-here-must-be-at-least-256-bits}
 
+# Service URLs (Docker에서는 컨테이너 이름 사용)
+services:
+  user-service:
+    url: ${USER_SERVICE_URL:http://localhost:8081}
+  question-service:
+    url: ${QUESTION_SERVICE_URL:http://localhost:8082}
+  interview-service:
+    url: ${INTERVIEW_SERVICE_URL:http://localhost:8083}
+  feedback-service:
+    url: ${FEEDBACK_SERVICE_URL:http://localhost:8084}
+
 logging:
   level:
     com.interviewcoach: DEBUG
