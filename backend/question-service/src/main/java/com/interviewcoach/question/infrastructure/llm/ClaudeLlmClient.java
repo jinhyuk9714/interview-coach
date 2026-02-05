@@ -3,6 +3,7 @@ package com.interviewcoach.question.infrastructure.llm;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.interviewcoach.question.application.dto.request.GenerateQuestionsRequest;
 import com.interviewcoach.question.infrastructure.rag.SimilarQuestionResult;
 import dev.langchain4j.model.anthropic.AnthropicChatModel;
 import dev.langchain4j.model.chat.ChatLanguageModel;
@@ -11,6 +12,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -240,6 +242,141 @@ public class ClaudeLlmClient implements LlmClient {
             log.error("Failed to generate questions with RAG context: {}", e.getMessage());
             // Fallback to standard generation
             return generateQuestions(jdText, skills, questionType, count, difficulty);
+        }
+    }
+
+    @Override
+    public List<GeneratedQuestionResult> generateQuestionsWithWeakAreas(
+            String jdText,
+            List<String> skills,
+            String questionType,
+            int count,
+            int difficulty,
+            List<SimilarQuestionResult> similarQuestions,
+            List<GenerateQuestionsRequest.WeakCategoryInfo> weakCategories) {
+
+        // 취약 분야가 없으면 기존 메서드 사용
+        if (weakCategories == null || weakCategories.isEmpty()) {
+            log.debug("No weak categories provided, using standard generation with context");
+            return generateQuestionsWithContext(jdText, skills, questionType, count, difficulty, similarQuestions);
+        }
+
+        if (chatModel == null) {
+            return createMockQuestions(questionType, count, difficulty);
+        }
+
+        // 점수 순으로 정렬 (낮은 점수가 먼저)
+        List<GenerateQuestionsRequest.WeakCategoryInfo> sortedWeakCategories = weakCategories.stream()
+                .sorted(Comparator.comparingInt(GenerateQuestionsRequest.WeakCategoryInfo::getScore))
+                .toList();
+
+        String weakCategoriesLog = sortedWeakCategories.stream()
+                .map(wc -> wc.getCategory() + "(" + wc.getScore() + "%)")
+                .collect(Collectors.joining(", "));
+        log.info("Generating questions with weak area priority: [{}]", weakCategoriesLog);
+
+        String difficultyDesc = switch (difficulty) {
+            case 1 -> "매우 쉬움 (신입 레벨)";
+            case 2 -> "쉬움 (1-2년차)";
+            case 3 -> "보통 (3-5년차)";
+            case 4 -> "어려움 (5-7년차)";
+            case 5 -> "매우 어려움 (시니어/리드)";
+            default -> "보통";
+        };
+
+        String typeInstruction = switch (questionType) {
+            case "technical" -> "기술적인 질문만 생성해주세요 (코딩, 시스템 설계, 알고리즘 등)";
+            case "behavioral" -> "행동 면접 질문만 생성해주세요 (경험, 상황 대처, 팀워크 등)";
+            default -> "기술 질문과 행동 면접 질문을 섞어서 생성해주세요";
+        };
+
+        // 취약 분야 텍스트 생성
+        String weakCategoriesText = sortedWeakCategories.stream()
+                .map(wc -> String.format("- %s: %d%%", wc.getCategory(), wc.getScore()))
+                .collect(Collectors.joining("\n"));
+
+        // 유사 질문 텍스트 생성
+        String similarQuestionsText = "";
+        if (similarQuestions != null && !similarQuestions.isEmpty()) {
+            similarQuestionsText = """
+
+            ## 참고할 기존 질문 (중복 방지용)
+            다음은 유사한 JD에서 사용된 기존 면접 질문들입니다.
+            이 질문들과 **중복되지 않는** 새롭고 창의적인 질문을 생성해주세요.
+
+            %s
+            """.formatted(similarQuestions.stream()
+                    .map(sq -> String.format("- [%s/%s] %s",
+                            sq.getQuestionType(),
+                            sq.getSkillCategory(),
+                            sq.getContent()))
+                    .collect(Collectors.joining("\n")));
+        }
+
+        String prompt = """
+            다음 채용 공고와 필요 기술을 바탕으로 면접 질문을 생성해주세요.
+
+            JD 내용:
+            %s
+
+            필요 기술: %s
+
+            요청 사항:
+            - %s
+            - 난이도: %s
+            - 질문 개수: %d개
+
+            ## 카테고리별 질문 분배 (취약 분야 우선)
+            사용자의 취약 분야를 우선적으로 반영하여 질문을 생성해주세요.
+
+            취약 분야 (점수 낮은 순):
+            %s
+
+            전체 질문 %d개 중:
+            - 취약 분야에서 60%% 이상 생성 (약 %d개)
+            - 나머지 분야에서 균등 분배
+            %s
+            다음 JSON 배열 형식으로 응답해주세요:
+            [
+                {
+                    "questionType": "technical 또는 behavioral",
+                    "skillCategory": "아래 카테고리 중 하나만 선택",
+                    "questionText": "면접 질문",
+                    "hint": "답변 힌트 (1-2문장)",
+                    "idealAnswer": "모범 답변 요약 (2-3문장)",
+                    "difficulty": %d
+                }
+            ]
+
+            skillCategory는 반드시 다음 중 하나만 사용하세요:
+            - 기술역량 (코딩, 알고리즘, 자료구조, 프로그래밍 언어 관련)
+            - 시스템설계 (아키텍처, 인프라, 확장성, 성능 관련)
+            - 문제해결 (트러블슈팅, 디버깅, 분석력 관련)
+            - 협업 (팀워크, 커뮤니케이션, 리더십 관련)
+            - 프로젝트경험 (실제 프로젝트 경험, 성과 관련)
+
+            JSON 배열만 응답하고 다른 텍스트는 포함하지 마세요.
+            """.formatted(
+                jdText,
+                String.join(", ", skills),
+                typeInstruction,
+                difficultyDesc,
+                count,
+                weakCategoriesText,
+                count,
+                (int) Math.ceil(count * 0.6),
+                similarQuestionsText,
+                difficulty);
+
+        try {
+            String response = chatModel.generate(prompt);
+            List<GeneratedQuestionResult> results = parseQuestionsResponse(response);
+            log.info("Generated {} questions with weak area priority", results.size());
+            return results;
+        } catch (Exception e) {
+            log.error("Failed to generate questions with weak areas: {}", e.getMessage());
+            // Fallback to standard generation with context
+            return generateQuestionsWithContext(jdText, skills, questionType, count, difficulty, similarQuestions);
         }
     }
 

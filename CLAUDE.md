@@ -122,7 +122,7 @@ cd frontend/web && npm run dev
 ### 질문 생성 (question-service)
 | Method | Endpoint | 설명 |
 |--------|----------|------|
-| POST | `/api/questions/generate` | AI 면접 질문 생성 (RAG 적용) |
+| POST | `/api/questions/generate` | AI 면접 질문 생성 (RAG, 취약 분야 우선 반영) |
 | GET | `/api/questions` | 생성된 질문 목록 |
 | GET | `/api/questions/similar` | 유사 질문 검색 (RAG) |
 | GET | `/api/questions/jd/{jdId}/similar` | JD 기반 유사 질문 검색 |
@@ -149,6 +149,16 @@ cd frontend/web && npm run dev
 - **피드백 응답에 포함**: `followUpQuestion`, `hasFollowUp` 필드
 - **동작 흐름**: 답변 → 피드백 + 꼬리 질문 생성 → 꼬리 질문 답변 → 원본 다음 질문으로 복귀
 
+### 취약 분야 우선 반영
+- **취약 기준**: 70% 미만 점수 카테고리
+- **동작 흐름**: JD 페이지 → 질문 생성 설정 모달 → "취약 분야 우선 반영" 체크 → LLM이 취약 분야에서 60% 비중으로 질문 생성
+- **API 파라미터**: `weakCategories: [{ category: string, score: number }]`
+
+### 일일 활동 기록
+- **테이블**: `daily_activity` (user_id, activity_date, question_count, total_score)
+- **시간대**: Asia/Seoul (KST) 기준
+- **용도**: 주간 활동 그래프, 학습 통계
+
 ## 데이터베이스 스키마
 
 ### 주요 테이블
@@ -170,6 +180,9 @@ generated_questions (id, jd_id, question, category, difficulty)
 
 -- 사용자 통계
 user_statistics (id, user_id, total_interviews, avg_score, strengths, weaknesses)
+
+-- 일일 활동 기록
+daily_activity (id, user_id, activity_date, question_count, total_score, interview_count)
 ```
 
 ## 환경 변수
