@@ -3,8 +3,11 @@ package com.interviewcoach.question.application.dto.request;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+
+import java.util.List;
 
 @Getter
 @NoArgsConstructor
@@ -22,4 +25,14 @@ public class GenerateQuestionsRequest {
     @Min(value = 1, message = "난이도는 1 이상이어야 합니다")
     @Max(value = 5, message = "난이도는 5 이하여야 합니다")
     private Integer difficulty = 3;
+
+    private List<WeakCategoryInfo> weakCategories;
+
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class WeakCategoryInfo {
+        private String category;  // "기술역량", "시스템설계" 등
+        private Integer score;    // 0-100
+    }
 }

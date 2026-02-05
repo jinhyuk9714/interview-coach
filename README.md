@@ -23,6 +23,8 @@ JD 기반 맞춤 질문 생성 + AI 모의 면접 + 실시간 피드백 시스�
 | **꼬리 질문** | 답변 부족 시 자동 꼬리 질문 생성 (최대 2단계 깊이) |
 | **면접 기록** | 과거 면접 이력 조회, 상세 리포트 확인 |
 | **학습 통계** | 취약 분야 추적, 카테고리별 정답률, 성장 추이 |
+| **취약 분야 우선** | 70% 미만 카테고리 자동 감지, 질문 생성 시 우선 반영 |
+| **일일 활동 기록** | 매일 답변 횟수/점수 추적, 주간 활동 그래프 |
 
 ## 아키텍처
 
@@ -408,6 +410,17 @@ erDiagram
         int total_correct
         decimal correct_rate
     }
+
+    daily_activity {
+        bigint id PK
+        bigint user_id FK
+        date activity_date
+        int question_count
+        int total_score
+        int interview_count
+    }
+
+    users ||--o{ daily_activity : tracks
 ```
 
 ## 개발 로드맵
@@ -435,7 +448,8 @@ erDiagram
   - [x] RAG 파이프라인 (ChromaDB + LangChain4j)
   - [x] Docker Compose 전체 스택 (한 번에 실행)
   - [x] 꼬리 질문 기능 (점수 기반 자동 생성, 최대 2단계)
-  - [ ] 취약점 분석 & 추천
+  - [x] 취약 분야 우선 반영 (70% 미만 카테고리 자동 감지 → 질문 생성 시 60% 비중)
+  - [x] 일일 활동 기록 (주간 활동 그래프, 실제 DB 데이터 기반)
 - [ ] **Phase 5: 배포**
   - [ ] Kubernetes 배포
   - [ ] CI/CD 파이프라인 완성
@@ -454,6 +468,8 @@ erDiagram
 | 새로고침 로그아웃 | Zustand hydration 상태 추적 |
 | 꼬리 질문 무한 루프 방지 | 최대 깊이 2 + 점수 85점 이상 시 중단 |
 | 꼬리 질문 후 원본 복귀 | 프론트엔드에서 returnToQuestionIndex 상태 관리 |
+| 취약 분야 우선 반영 | 통계 API에서 70% 미만 카테고리 추출 → LLM 프롬프트에 60% 비중 지시 |
+| SVG 원형 게이지 색상 | Tailwind 클래스 대신 인라인 스타일로 동적 색상 적용 |
 
 ## 라이선스
 

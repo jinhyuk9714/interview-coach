@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button, Card, Input, Textarea, Tag } from '@/components/ui';
-import { jdApi, questionApi } from '@/lib/api';
+import { jdApi, questionApi, statisticsApi } from '@/lib/api';
 import {
   Plus,
   FileText,
@@ -18,7 +18,9 @@ import {
   ArrowRight,
   X,
   AlertCircle,
-  Trash2
+  Trash2,
+  Settings2,
+  AlertTriangle
 } from 'lucide-react';
 import type { JobDescription, JdAnalysis, GeneratedQuestion } from '@/types';
 
@@ -43,6 +45,17 @@ export default function JdPage() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<JobDescription | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Generate modal states
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [generateSettings, setGenerateSettings] = useState({
+    count: 5,
+    difficulty: 3,
+    questionType: 'mixed' as 'mixed' | 'technical' | 'behavioral',
+    prioritizeWeakAreas: false,
+  });
+  const [weakPoints, setWeakPoints] = useState<Array<{ category: string; score: number }>>([]);
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
 
   // Load JD list on mount
   useEffect(() => {
@@ -107,19 +120,58 @@ export default function JdPage() {
     }
   };
 
-  const handleGenerateQuestions = async () => {
+  const handleOpenGenerateModal = async () => {
+    setShowGenerateModal(true);
+    setIsLoadingStats(true);
+    setWeakPoints([]);
+
+    try {
+      const response = await statisticsApi.get();
+      const stats = response.data;
+
+      // 70% 미만인 카테고리 추출 (categoryStats 배열에서)
+      if (stats?.categoryStats && Array.isArray(stats.categoryStats)) {
+        const weak = stats.categoryStats
+          .filter((cat: { category: string; score: number }) => cat.score < 70)
+          .map((cat: { category: string; score: number }) => ({ category: cat.category, score: cat.score }))
+          .sort((a: { score: number }, b: { score: number }) => a.score - b.score);
+        setWeakPoints(weak);
+      }
+    } catch (err) {
+      console.error('Failed to fetch statistics:', err);
+      // 통계 로드 실패해도 모달은 표시
+    } finally {
+      setIsLoadingStats(false);
+    }
+  };
+
+  const handleConfirmGenerate = async () => {
     if (!selectedJd) return;
 
+    setShowGenerateModal(false);
     setIsGenerating(true);
     setError(null);
 
     try {
-      const response = await questionApi.generate({
+      const requestData: {
+        jdId: number;
+        questionType: string;
+        count: number;
+        difficulty: number;
+        weakCategories?: Array<{ category: string; score: number }>;
+      } = {
         jdId: selectedJd.id,
-        questionType: 'mixed',
-        count: 5,
-        difficulty: 3,
-      });
+        questionType: generateSettings.questionType,
+        count: generateSettings.count,
+        difficulty: generateSettings.difficulty,
+      };
+
+      // 취약 분야 우선 반영이 체크되어 있고 취약 분야가 있으면 추가
+      if (generateSettings.prioritizeWeakAreas && weakPoints.length > 0) {
+        requestData.weakCategories = weakPoints;
+      }
+
+      const response = await questionApi.generate(requestData);
       setQuestions(response.data.questions || response.data);
     } catch (err) {
       console.error('Failed to generate questions:', err);
@@ -354,10 +406,10 @@ export default function JdPage() {
                       </div>
 
                       <Button
-                        onClick={handleGenerateQuestions}
+                        onClick={handleOpenGenerateModal}
                         isLoading={isGenerating}
                         className="w-full"
-                        rightIcon={<ArrowRight className="w-4 h-4" />}
+                        rightIcon={<Settings2 className="w-4 h-4" />}
                       >
                         예상 질문 생성하기
                       </Button>
@@ -476,6 +528,180 @@ export default function JdPage() {
                   >
                     삭제하기
                   </Button>
+                </div>
+              </Card>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Generate Settings Modal */}
+      <AnimatePresence>
+        {showGenerateModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/50"
+            onClick={() => setShowGenerateModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md"
+            >
+              <Card className="p-0 overflow-hidden">
+                <div className="p-4 bg-ink text-paper flex items-center justify-between">
+                  <h2 className="font-sans font-semibold flex items-center gap-2">
+                    <Settings2 className="w-4 h-4" />
+                    질문 생성 설정
+                  </h2>
+                  <button
+                    onClick={() => setShowGenerateModal(false)}
+                    className="p-1 hover:bg-white/10 rounded"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-6 space-y-5">
+                  {/* 질문 개수 */}
+                  <div>
+                    <label className="block text-sm font-semibold mb-2">질문 개수</label>
+                    <div className="flex gap-2">
+                      {[3, 5, 7, 10].map((num) => (
+                        <button
+                          key={num}
+                          onClick={() => setGenerateSettings({ ...generateSettings, count: num })}
+                          className={`flex-1 py-2 px-3 border-2 transition-colors ${
+                            generateSettings.count === num
+                              ? 'border-ink bg-accent-lime'
+                              : 'border-neutral-200 hover:border-neutral-400'
+                          }`}
+                        >
+                          {num}개
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 난이도 */}
+                  <div>
+                    <label className="block text-sm font-semibold mb-2">난이도</label>
+                    <div className="flex gap-2">
+                      {[1, 2, 3, 4, 5].map((level) => (
+                        <button
+                          key={level}
+                          onClick={() => setGenerateSettings({ ...generateSettings, difficulty: level })}
+                          className={`flex-1 py-2 px-3 border-2 transition-colors ${
+                            generateSettings.difficulty === level
+                              ? 'border-ink bg-accent-blue text-white'
+                              : 'border-neutral-200 hover:border-neutral-400'
+                          }`}
+                        >
+                          {level}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-neutral-500 mt-1">
+                      {generateSettings.difficulty === 1 && '매우 쉬움 (신입 레벨)'}
+                      {generateSettings.difficulty === 2 && '쉬움 (1-2년차)'}
+                      {generateSettings.difficulty === 3 && '보통 (3-5년차)'}
+                      {generateSettings.difficulty === 4 && '어려움 (5-7년차)'}
+                      {generateSettings.difficulty === 5 && '매우 어려움 (시니어/리드)'}
+                    </p>
+                  </div>
+
+                  {/* 질문 유형 */}
+                  <div>
+                    <label className="block text-sm font-semibold mb-2">질문 유형</label>
+                    <div className="flex gap-2">
+                      {[
+                        { value: 'mixed', label: '혼합' },
+                        { value: 'technical', label: '기술' },
+                        { value: 'behavioral', label: '인성' },
+                      ].map((type) => (
+                        <button
+                          key={type.value}
+                          onClick={() => setGenerateSettings({ ...generateSettings, questionType: type.value as 'mixed' | 'technical' | 'behavioral' })}
+                          className={`flex-1 py-2 px-3 border-2 transition-colors ${
+                            generateSettings.questionType === type.value
+                              ? 'border-ink bg-accent-coral text-white'
+                              : 'border-neutral-200 hover:border-neutral-400'
+                          }`}
+                        >
+                          {type.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 취약 분야 우선 반영 */}
+                  <div className="border-t-2 border-neutral-100 pt-5">
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={generateSettings.prioritizeWeakAreas}
+                        onChange={(e) => setGenerateSettings({ ...generateSettings, prioritizeWeakAreas: e.target.checked })}
+                        className="mt-1 w-5 h-5 border-2 border-ink accent-accent-coral"
+                      />
+                      <div className="flex-1">
+                        <span className="font-semibold flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-accent-coral" />
+                          취약 분야 우선 반영
+                        </span>
+                        <p className="text-sm text-neutral-500 mt-1">
+                          70% 미만 카테고리에서 더 많은 질문을 생성합니다
+                        </p>
+                      </div>
+                    </label>
+
+                    {/* 취약 분야 표시 */}
+                    {generateSettings.prioritizeWeakAreas && (
+                      <div className="mt-3 p-3 bg-neutral-50 border-l-4 border-accent-coral">
+                        {isLoadingStats ? (
+                          <div className="flex items-center gap-2 text-neutral-500">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span className="text-sm">통계 불러오는 중...</span>
+                          </div>
+                        ) : weakPoints.length > 0 ? (
+                          <>
+                            <p className="text-sm font-semibold mb-2">취약 분야:</p>
+                            <div className="flex flex-wrap gap-2">
+                              {weakPoints.map((wp) => (
+                                <Tag key={wp.category} variant="coral" size="sm">
+                                  {wp.category} {wp.score}%
+                                </Tag>
+                              ))}
+                            </div>
+                          </>
+                        ) : (
+                          <p className="text-sm text-neutral-500">
+                            아직 면접 기록이 없어 취약 분야를 분석할 수 없습니다.
+                            면접을 진행하면 자동으로 분석됩니다.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 버튼 */}
+                  <div className="flex gap-3 justify-end pt-2">
+                    <Button
+                      variant="secondary"
+                      onClick={() => setShowGenerateModal(false)}
+                    >
+                      취소
+                    </Button>
+                    <Button
+                      onClick={handleConfirmGenerate}
+                      rightIcon={<ArrowRight className="w-4 h-4" />}
+                    >
+                      질문 생성하기
+                    </Button>
+                  </div>
                 </div>
               </Card>
             </motion.div>

@@ -4,7 +4,9 @@ import com.interviewcoach.feedback.application.dto.request.RecordAnswerRequest;
 import com.interviewcoach.feedback.application.dto.response.StatisticsResponse;
 import com.interviewcoach.feedback.application.dto.response.UserStatisticsSummaryResponse;
 import com.interviewcoach.feedback.application.dto.response.UserStatisticsSummaryResponse.*;
+import com.interviewcoach.feedback.domain.entity.DailyActivity;
 import com.interviewcoach.feedback.domain.entity.UserStatistics;
+import com.interviewcoach.feedback.domain.repository.DailyActivityRepository;
 import com.interviewcoach.feedback.domain.repository.UserStatisticsRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +17,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.format.TextStyle;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -24,7 +27,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class StatisticsService {
 
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+
     private final UserStatisticsRepository statisticsRepository;
+    private final DailyActivityRepository dailyActivityRepository;
 
     /**
      * [동시성 이슈 포인트] - 락 없이 통계 업데이트
@@ -57,6 +63,19 @@ public class StatisticsService {
         if (request.getWeakPoint() != null && !request.getWeakPoint().isBlank()) {
             stats.addWeakPoint(request.getWeakPoint());
         }
+
+        // Record daily activity
+        LocalDate today = LocalDate.now(KST);
+        DailyActivity dailyActivity = dailyActivityRepository
+                .findByUserIdAndActivityDate(userId, today)
+                .orElseGet(() -> {
+                    DailyActivity newActivity = DailyActivity.builder()
+                            .userId(userId)
+                            .activityDate(today)
+                            .build();
+                    return dailyActivityRepository.save(newActivity);
+                });
+        dailyActivity.recordActivity(score);
 
         log.info("Recorded answer: userId={}, category={}, isCorrect={}, total={}",
                 userId, request.getSkillCategory(), request.getIsCorrect(), stats.getTotalQuestions());
@@ -112,8 +131,8 @@ public class StatisticsService {
                         .build())
                 .collect(Collectors.toList());
 
-        // Weekly activity (generate sample data based on recent activity)
-        List<WeeklyActivityResponse> weeklyActivity = generateWeeklyActivity(totalInterviews, avgScore);
+        // Weekly activity from actual DB records
+        List<WeeklyActivityResponse> weeklyActivity = generateWeeklyActivity(userId);
 
         // Recent progress (generate sample data based on overall score)
         List<ProgressPointResponse> recentProgress = generateRecentProgress(avgScore, totalInterviews);
@@ -158,24 +177,26 @@ public class StatisticsService {
         return "-";
     }
 
-    private List<WeeklyActivityResponse> generateWeeklyActivity(int totalInterviews, int avgScore) {
+    private List<WeeklyActivityResponse> generateWeeklyActivity(Long userId) {
         List<WeeklyActivityResponse> activity = new ArrayList<>();
-        LocalDate today = LocalDate.now();
-        int todayDayOfWeek = today.getDayOfWeek().getValue(); // 1=Mon, 7=Sun
+        LocalDate today = LocalDate.now(KST);
+        LocalDate weekAgo = today.minusDays(6);
+
+        // Fetch actual activity data from DB
+        List<DailyActivity> dailyActivities = dailyActivityRepository
+                .findByUserIdAndActivityDateBetween(userId, weekAgo, today);
+
+        // Create a map for quick lookup
+        Map<LocalDate, DailyActivity> activityMap = dailyActivities.stream()
+                .collect(Collectors.toMap(DailyActivity::getActivityDate, a -> a));
 
         for (int i = 6; i >= 0; i--) {
             LocalDate date = today.minusDays(i);
             String dayName = date.getDayOfWeek().getDisplayName(TextStyle.SHORT, Locale.KOREAN);
 
-            // Only show activity for today if there are interviews
-            // This is deterministic - no random values
-            int count = 0;
-            int score = 0;
-            if (i == 0 && totalInterviews > 0) {
-                // Today's activity
-                count = Math.min(totalInterviews, 5);
-                score = avgScore;
-            }
+            DailyActivity dayActivity = activityMap.get(date);
+            int count = dayActivity != null ? dayActivity.getQuestionCount() : 0;
+            int score = dayActivity != null ? dayActivity.getAverageScore() : 0;
 
             activity.add(WeeklyActivityResponse.builder()
                     .day(dayName)
@@ -194,7 +215,7 @@ public class StatisticsService {
         }
 
         // Only show today's data point with actual average score - no random values
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(KST);
         progress.add(ProgressPointResponse.builder()
                 .date(String.format("%d/%d", today.getMonthValue(), today.getDayOfMonth()))
                 .score(avgScore)

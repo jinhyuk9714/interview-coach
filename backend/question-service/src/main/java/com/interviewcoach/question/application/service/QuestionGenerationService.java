@@ -50,9 +50,23 @@ public class QuestionGenerationService {
         List<SimilarQuestionResult> similarQuestions = findSimilarQuestionsForContext(
                 jd.getOriginalText(), questionType, skills);
 
-        // LLM으로 질문 생성 (RAG 컨텍스트 활용)
+        // LLM으로 질문 생성 (RAG 컨텍스트 + 취약 분야 활용)
         List<LlmClient.GeneratedQuestionResult> results;
-        if (!similarQuestions.isEmpty()) {
+        List<GenerateQuestionsRequest.WeakCategoryInfo> weakCategories = request.getWeakCategories();
+
+        if (weakCategories != null && !weakCategories.isEmpty()) {
+            // 취약 분야 우선 반영 모드
+            log.info("Generating with weak area priority: {} weak categories", weakCategories.size());
+            results = llmClient.generateQuestionsWithWeakAreas(
+                    jd.getOriginalText(),
+                    skills,
+                    questionType,
+                    request.getCount(),
+                    request.getDifficulty(),
+                    similarQuestions,
+                    weakCategories
+            );
+        } else if (!similarQuestions.isEmpty()) {
             log.info("Found {} similar questions for RAG context", similarQuestions.size());
             results = llmClient.generateQuestionsWithContext(
                     jd.getOriginalText(),

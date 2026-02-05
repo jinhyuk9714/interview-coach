@@ -84,8 +84,13 @@ export const jdApi = {
 
 // Question API
 export const questionApi = {
-  generate: (data: { jdId: number; questionType: string; count: number; difficulty: number }) =>
-    api.post('/api/v1/questions/generate', data),
+  generate: (data: {
+    jdId: number;
+    questionType: string;
+    count: number;
+    difficulty: number;
+    weakCategories?: Array<{ category: string; score: number }>;
+  }) => api.post('/api/v1/questions/generate', data),
 
   listByJd: (jdId: number) => api.get(`/api/v1/questions/jd/${jdId}`),
 };

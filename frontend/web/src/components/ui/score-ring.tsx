@@ -1,6 +1,6 @@
 'use client';
 
-import { cn, getScoreColor } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { motion } from 'motion/react';
 
 interface ScoreRingProps {
@@ -16,11 +16,19 @@ const sizes = {
   lg: { width: 120, strokeWidth: 8, fontSize: 'text-3xl' },
 };
 
+function getScoreStrokeColor(score: number): string {
+  if (score >= 80) return '#22c55e'; // green-500
+  if (score >= 60) return '#eab308'; // yellow-500
+  if (score >= 40) return '#f97316'; // orange-500
+  return '#ef4444'; // red-500
+}
+
 export function ScoreRing({ score, size = 'md', className, showLabel = true }: ScoreRingProps) {
   const { width, strokeWidth, fontSize } = sizes[size];
   const radius = (width - strokeWidth) / 2;
   const circumference = radius * 2 * Math.PI;
   const offset = circumference - (score / 100) * circumference;
+  const strokeColor = getScoreStrokeColor(score);
 
   return (
     <div className={cn('relative inline-flex items-center justify-center', className)}>
@@ -31,9 +39,8 @@ export function ScoreRing({ score, size = 'md', className, showLabel = true }: S
           cy={width / 2}
           r={radius}
           fill="none"
-          stroke="currentColor"
+          stroke="#e5e5e5"
           strokeWidth={strokeWidth}
-          className="text-neutral-200"
         />
         {/* Progress */}
         <motion.circle
@@ -41,9 +48,9 @@ export function ScoreRing({ score, size = 'md', className, showLabel = true }: S
           cy={width / 2}
           r={radius}
           fill="none"
+          stroke={strokeColor}
           strokeWidth={strokeWidth}
           strokeLinecap="round"
-          className={getScoreColor(score)}
           strokeDasharray={circumference}
           initial={{ strokeDashoffset: circumference }}
           animate={{ strokeDashoffset: offset }}
@@ -51,7 +58,7 @@ export function ScoreRing({ score, size = 'md', className, showLabel = true }: S
         />
       </svg>
       {showLabel && (
-        <span className={cn('absolute font-mono font-bold', fontSize)}>
+        <span className={cn('absolute font-mono font-bold', fontSize)} style={{ color: strokeColor }}>
           {score}
         </span>
       )}

@@ -144,6 +144,8 @@ export default function InterviewPage() {
         interviewType: 'mixed',
       });
 
+      // Reset currentQuestionIndex before setting new session
+      setCurrentQuestionIndex(0);
       setSession(response.data);
       setOriginalTotalQuestions(response.data.totalQuestions || questions.length);
       setIsStarted(true);
@@ -415,16 +417,35 @@ export default function InterviewPage() {
               <div className="grid grid-cols-3 gap-4 max-w-lg mx-auto mb-8">
                 <div className="p-4 bg-cream border-2 border-ink">
                   <div className="text-2xl font-display mb-1">
-                    {availableQuestions.length > 0 ? Math.min(availableQuestions.length, 5) : 5}
+                    {availableQuestions.length || '-'}
                   </div>
                   <div className="text-xs text-neutral-500 uppercase">질문</div>
                 </div>
                 <div className="p-4 bg-cream border-2 border-ink">
-                  <div className="text-2xl font-display mb-1">혼합</div>
+                  <div className="text-2xl font-display mb-1">
+                    {availableQuestions.length > 0
+                      ? (() => {
+                          const types = new Set(availableQuestions.map(q => q.questionType));
+                          if (types.size > 1) return '혼합';
+                          const type = availableQuestions[0]?.questionType;
+                          return type === 'technical' ? '기술' : type === 'behavioral' ? '인성' : '혼합';
+                        })()
+                      : '-'}
+                  </div>
                   <div className="text-xs text-neutral-500 uppercase">유형</div>
                 </div>
                 <div className="p-4 bg-cream border-2 border-ink">
-                  <div className="text-2xl font-display mb-1">중급</div>
+                  <div className="text-2xl font-display mb-1">
+                    {availableQuestions.length > 0
+                      ? (() => {
+                          const avgDifficulty = Math.round(
+                            availableQuestions.reduce((sum, q) => sum + q.difficulty, 0) / availableQuestions.length
+                          );
+                          const labels = ['', '입문', '초급', '중급', '고급', '전문가'];
+                          return labels[avgDifficulty] || '중급';
+                        })()
+                      : '-'}
+                  </div>
                   <div className="text-xs text-neutral-500 uppercase">난이도</div>
                 </div>
               </div>
