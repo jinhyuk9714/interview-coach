@@ -76,6 +76,9 @@ export interface InterviewQna {
   answerText?: string;
   feedback?: QnaFeedback;
   answeredAt?: string;
+  parentQnaId?: number;
+  followUpDepth?: number;
+  isFollowUp?: boolean;
 }
 
 export interface QnaFeedback {
@@ -83,6 +86,15 @@ export interface QnaFeedback {
   strengths: string[];
   improvements: string[];
   tips: string[];
+  followUpQuestion?: FollowUpQuestion;
+  hasFollowUp?: boolean;
+}
+
+export interface FollowUpQuestion {
+  questionText: string;
+  focusArea: string;
+  rationale: string;
+  shouldAsk: boolean;
 }
 
 // Statistics types

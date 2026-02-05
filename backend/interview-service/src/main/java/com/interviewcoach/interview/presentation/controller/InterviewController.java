@@ -1,5 +1,6 @@
 package com.interviewcoach.interview.presentation.controller;
 
+import com.interviewcoach.interview.application.dto.request.AddFollowUpRequest;
 import com.interviewcoach.interview.application.dto.request.StartInterviewRequest;
 import com.interviewcoach.interview.application.dto.request.SubmitAnswerRequest;
 import com.interviewcoach.interview.application.dto.response.InterviewListResponse;
@@ -60,5 +61,13 @@ public class InterviewController {
             @RequestBody java.util.Map<String, Object> feedback) {
         QnaResponse response = interviewService.updateFeedback(id, questionOrder, feedback);
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{id}/follow-up")
+    public ResponseEntity<QnaResponse> addFollowUpQuestion(
+            @PathVariable Long id,
+            @Valid @RequestBody AddFollowUpRequest request) {
+        QnaResponse response = interviewService.addFollowUpQuestion(id, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 }

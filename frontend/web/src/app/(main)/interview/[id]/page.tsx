@@ -92,6 +92,7 @@ export default function InterviewDetailPage() {
 
   const technicalQna = answeredQna.filter(q => q.questionType === 'technical');
   const behavioralQna = answeredQna.filter(q => q.questionType === 'behavioral' || q.questionType === 'mixed');
+  const followUpQna = answeredQna.filter(q => q.questionType === 'follow_up');
 
   const technicalAvg = technicalQna.length > 0
     ? Math.round(technicalQna.reduce((acc, q) => acc + getQnaFeedback(q).score, 0) / technicalQna.length)
@@ -99,6 +100,12 @@ export default function InterviewDetailPage() {
   const behavioralAvg = behavioralQna.length > 0
     ? Math.round(behavioralQna.reduce((acc, q) => acc + getQnaFeedback(q).score, 0) / behavioralQna.length)
     : 0;
+  const followUpAvg = followUpQna.length > 0
+    ? Math.round(followUpQna.reduce((acc, q) => acc + getQnaFeedback(q).score, 0) / followUpQna.length)
+    : 0;
+
+  // Calculate original questions count (excluding follow-ups)
+  const originalQnaCount = answeredQna.filter(q => q.questionType !== 'follow_up').length;
 
   // Collect all strengths and improvements
   const allStrengths = answeredQna.flatMap(q => getQnaFeedback(q).strengths);
@@ -217,7 +224,7 @@ export default function InterviewDetailPage() {
                 </motion.div>
                 <h3 className="font-display text-lg">종합 점수</h3>
                 <p className="text-sm text-neutral-500">
-                  {answeredQna.length}개 질문 답변
+                  {originalQnaCount}개 질문{followUpQna.length > 0 ? ` + ${followUpQna.length}개 꼬리질문` : ''} 답변
                 </p>
               </div>
 
@@ -268,6 +275,29 @@ export default function InterviewDetailPage() {
                     />
                   </div>
                 </div>
+
+                {/* Follow-up */}
+                {followUpQna.length > 0 && (
+                  <div className="p-4 bg-cream border-2 border-ink">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Tag variant="lime" size="sm">꼬리 질문</Tag>
+                        <span className="text-sm text-neutral-500">
+                          {followUpQna.length}개 질문
+                        </span>
+                      </div>
+                      <span className="font-mono font-bold">{followUpAvg}점</span>
+                    </div>
+                    <div className="h-2 bg-neutral-200 overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${followUpAvg}%` }}
+                        transition={{ delay: 0.7, duration: 0.8 }}
+                        className="h-full bg-accent-lime"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </Card>
@@ -349,7 +379,7 @@ export default function InterviewDetailPage() {
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.5 + index * 0.05 }}
-                    className="border-2 border-ink"
+                    className={`border-2 border-ink ${qna.isFollowUp ? 'ml-6 border-l-4 border-l-accent-lime' : ''}`}
                   >
                     {/* Question Header */}
                     <button
@@ -362,11 +392,14 @@ export default function InterviewDetailPage() {
                             Q{index + 1}
                           </span>
                           <Tag
-                            variant={qna.questionType === 'technical' ? 'blue' : 'coral'}
+                            variant={qna.questionType === 'technical' ? 'blue' : qna.questionType === 'follow_up' ? 'lime' : 'coral'}
                             size="sm"
                           >
-                            {qna.questionType === 'technical' ? '기술' : '인성'}
+                            {qna.questionType === 'technical' ? '기술' : qna.questionType === 'follow_up' ? '꼬리' : '인성'}
                           </Tag>
+                          {qna.isFollowUp && qna.followUpDepth && (
+                            <span className="text-xs text-neutral-400">(깊이 {qna.followUpDepth})</span>
+                          )}
                         </div>
                         <p className="font-display text-lg">{qna.questionText}</p>
                       </div>

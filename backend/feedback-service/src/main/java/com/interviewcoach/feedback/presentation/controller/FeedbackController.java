@@ -18,8 +18,9 @@ public class FeedbackController {
             @PathVariable Long sessionId,
             @RequestParam(required = false) Long qnaId,
             @RequestParam(required = false) String question,
-            @RequestParam(required = false) String answer) {
-        return feedbackService.streamFeedback(sessionId, qnaId, question, answer);
+            @RequestParam(required = false) String answer,
+            @RequestParam(required = false, defaultValue = "0") Integer followUpDepth) {
+        return feedbackService.streamFeedback(sessionId, qnaId, question, answer, followUpDepth);
     }
 
     // POST endpoint for long answers (no URL length limit)
@@ -27,8 +28,9 @@ public class FeedbackController {
     public SseEmitter streamFeedbackPost(
             @PathVariable Long sessionId,
             @RequestBody FeedbackRequest request) {
-        return feedbackService.streamFeedback(sessionId, request.qnaId(), request.question(), request.answer());
+        int depth = request.followUpDepth() != null ? request.followUpDepth() : 0;
+        return feedbackService.streamFeedback(sessionId, request.qnaId(), request.question(), request.answer(), depth);
     }
 
-    public record FeedbackRequest(Long qnaId, String question, String answer) {}
+    public record FeedbackRequest(Long qnaId, String question, String answer, Integer followUpDepth) {}
 }

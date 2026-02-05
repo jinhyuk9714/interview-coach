@@ -22,7 +22,7 @@ import {
   Loader2,
   FileText
 } from 'lucide-react';
-import type { InterviewQna, QnaFeedback, GeneratedQuestion, JobDescription } from '@/types';
+import type { InterviewQna, QnaFeedback, GeneratedQuestion, JobDescription, FollowUpQuestion } from '@/types';
 
 // Track question with its skill category for statistics
 interface QuestionWithCategory {
@@ -40,7 +40,6 @@ export default function InterviewPage() {
     setSession,
     currentQuestionIndex,
     setCurrentQuestionIndex,
-    nextQuestion,
     isSubmitting,
     setSubmitting,
     streamingFeedback,
@@ -65,6 +64,11 @@ export default function InterviewPage() {
   const [questionsWithCategory, setQuestionsWithCategory] = useState<QuestionWithCategory[]>([]);
   const questionsWithCategoryRef = useRef<QuestionWithCategory[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [followUpQuestion, setFollowUpQuestion] = useState<FollowUpQuestion | null>(null);
+  const [currentFollowUpDepth, setCurrentFollowUpDepth] = useState(0);
+  const [isAddingFollowUp, setIsAddingFollowUp] = useState(false);
+  const [returnToQuestionIndex, setReturnToQuestionIndex] = useState<number | null>(null);
+  const [originalTotalQuestions, setOriginalTotalQuestions] = useState(0);
 
   // Load JD list when no jdId is provided
   useEffect(() => {
@@ -141,6 +145,7 @@ export default function InterviewPage() {
       });
 
       setSession(response.data);
+      setOriginalTotalQuestions(response.data.totalQuestions || questions.length);
       setIsStarted(true);
     } catch (err) {
       console.error('Failed to start interview:', err);
@@ -176,15 +181,25 @@ export default function InterviewPage() {
           qnaId: currentQna?.id,
           question: currentQna?.questionText,
           answer: answer,
+          followUpDepth: currentFollowUpDepth,
         },
         // onFeedback callback
         (data) => {
+          const followUp = data.followUpQuestion as FollowUpQuestion | undefined;
           feedbackData = {
             score: (data.score as number) || 75,
             strengths: (data.strengths as string[]) || [],
             improvements: (data.improvements as string[]) || [],
             tips: Array.isArray(data.tips) ? data.tips as string[] : (data.tips ? [data.tips as string] : []),
+            followUpQuestion: followUp,
+            hasFollowUp: (data.hasFollowUp as boolean) || false,
           };
+          // Capture follow-up question for UI
+          if (followUp && data.hasFollowUp) {
+            setFollowUpQuestion(followUp);
+          } else {
+            setFollowUpQuestion(null);
+          }
           // Display overall comment as streaming feedback
           if (data.overallComment) {
             setStreamingFeedback(data.overallComment as string);
@@ -267,12 +282,33 @@ export default function InterviewPage() {
   };
 
   const handleNext = async () => {
-    if (currentQuestionIndex < (session?.totalQuestions || 0) - 1) {
-      nextQuestion();
+    // If we're in a follow-up question, return to original question sequence
+    if (returnToQuestionIndex !== null && currentQna?.isFollowUp) {
+      // Return to the next original question
+      if (returnToQuestionIndex < originalTotalQuestions) {
+        setCurrentQuestionIndex(returnToQuestionIndex);
+        setReturnToQuestionIndex(null);
+        setCurrentFollowUpDepth(0);
+        setAnswer('');
+        setFeedback(null);
+        setShowFeedback(false);
+        setStreamingFeedback('');
+        setFollowUpQuestion(null);
+        return;
+      }
+    }
+
+    // Check if there are more original questions to answer
+    const nextOriginalIndex = currentQuestionIndex + 1;
+    if (nextOriginalIndex < originalTotalQuestions) {
+      setCurrentQuestionIndex(nextOriginalIndex);
       setAnswer('');
       setFeedback(null);
       setShowFeedback(false);
       setStreamingFeedback('');
+      setFollowUpQuestion(null);
+      setCurrentFollowUpDepth(0);
+      setReturnToQuestionIndex(null);
     } else {
       // Complete the interview (statistics already recorded per question)
       if (session) {
@@ -283,6 +319,50 @@ export default function InterviewPage() {
         }
       }
       setIsCompleted(true);
+    }
+  };
+
+  const handleAnswerFollowUp = async () => {
+    if (!followUpQuestion || !currentQna || !session) return;
+
+    setIsAddingFollowUp(true);
+    setError(null);
+
+    try {
+      // Save current position to return after follow-up (only if not already in follow-up)
+      if (returnToQuestionIndex === null) {
+        setReturnToQuestionIndex(currentQuestionIndex + 1);
+      }
+
+      const response = await interviewApi.addFollowUp(session.id, {
+        parentQnaId: currentQna.id,
+        questionText: followUpQuestion.questionText,
+        followUpDepth: currentFollowUpDepth + 1,
+        focusArea: followUpQuestion.focusArea,
+      });
+
+      // Update session with new QnA
+      const newQna = response.data;
+      const updatedQnaList = [...(session.qnaList || []), newQna];
+      setSession({
+        ...session,
+        qnaList: updatedQnaList,
+        totalQuestions: updatedQnaList.length,
+      });
+
+      // Move to the new follow-up question
+      setCurrentQuestionIndex(updatedQnaList.length - 1);
+      setCurrentFollowUpDepth(currentFollowUpDepth + 1);
+      setAnswer('');
+      setFeedback(null);
+      setShowFeedback(false);
+      setStreamingFeedback('');
+      setFollowUpQuestion(null);
+    } catch (err) {
+      console.error('Failed to add follow-up question:', err);
+      setError('꼬리 질문 추가에 실패했습니다.');
+    } finally {
+      setIsAddingFollowUp(false);
     }
   };
 
@@ -299,6 +379,10 @@ export default function InterviewPage() {
     setError(null);
     setQuestionsWithCategory([]);
     questionsWithCategoryRef.current = [];
+    setFollowUpQuestion(null);
+    setCurrentFollowUpDepth(0);
+    setReturnToQuestionIndex(null);
+    setOriginalTotalQuestions(0);
   };
 
   // Start screen
@@ -468,7 +552,7 @@ export default function InterviewPage() {
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.1 }}
-                    className="p-4 bg-cream border-2 border-ink"
+                    className={`p-4 border-2 border-ink ${result.qna.isFollowUp ? 'bg-accent-blue/5 ml-4' : 'bg-cream'}`}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
@@ -477,11 +561,14 @@ export default function InterviewPage() {
                             Q{index + 1}
                           </span>
                           <Tag
-                            variant={result.qna.questionType === 'technical' ? 'blue' : 'coral'}
+                            variant={result.qna.questionType === 'technical' ? 'blue' : result.qna.questionType === 'follow_up' ? 'lime' : 'coral'}
                             size="sm"
                           >
-                            {result.qna.questionType === 'technical' ? '기술' : '인성'}
+                            {result.qna.questionType === 'technical' ? '기술' : result.qna.questionType === 'follow_up' ? '꼬리' : '인성'}
                           </Tag>
+                          {result.qna.isFollowUp && (
+                            <span className="text-xs text-neutral-400">(깊이: {result.qna.followUpDepth})</span>
+                          )}
                         </div>
                         <p className="text-sm">{result.qna.questionText}</p>
                       </div>
@@ -563,12 +650,17 @@ export default function InterviewPage() {
         >
           <Card className="p-6 mb-6">
             <div className="flex items-center gap-2 mb-4">
-              <Tag variant={currentQna?.questionType === 'technical' ? 'blue' : 'coral'}>
-                {currentQna?.questionType === 'technical' ? '기술 질문' : '인성 질문'}
+              <Tag variant={currentQna?.questionType === 'technical' ? 'blue' : currentQna?.questionType === 'follow_up' ? 'lime' : 'coral'}>
+                {currentQna?.questionType === 'technical' ? '기술 질문' : currentQna?.questionType === 'follow_up' ? '꼬리 질문' : '인성 질문'}
               </Tag>
               <span className="text-xs font-mono text-neutral-400">
                 #{currentQuestionIndex + 1}
               </span>
+              {currentQna?.isFollowUp && (
+                <span className="text-xs text-neutral-400">
+                  (깊이: {currentQna.followUpDepth})
+                </span>
+              )}
             </div>
 
             <blockquote className="font-display text-2xl leading-relaxed border-l-4 border-ink pl-6">
@@ -675,6 +767,27 @@ export default function InterviewPage() {
                 </motion.div>
               )}
 
+              {/* Follow-up Question */}
+              {feedback && !isStreaming && followUpQuestion && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-4 p-4 bg-accent-blue/10 border-2 border-accent-blue"
+                >
+                  <h4 className="font-semibold text-accent-blue flex items-center gap-2 mb-2">
+                    <RotateCcw className="w-4 h-4" />
+                    꼬리 질문
+                  </h4>
+                  <p className="text-sm text-neutral-700 mb-2">
+                    &ldquo;{followUpQuestion.questionText}&rdquo;
+                  </p>
+                  <div className="flex items-center gap-2 text-xs text-neutral-500">
+                    <Tag variant="blue" size="sm">{followUpQuestion.focusArea}</Tag>
+                    <span>{followUpQuestion.rationale}</span>
+                  </div>
+                </motion.div>
+              )}
+
               {/* Navigation */}
               {!isStreaming && (
                 <motion.div
@@ -687,19 +800,32 @@ export default function InterviewPage() {
                     onClick={() => {
                       setShowFeedback(false);
                       setAnswer('');
+                      setFollowUpQuestion(null);
                     }}
                     leftIcon={<RotateCcw className="w-4 h-4" />}
                   >
                     다시 답변하기
                   </Button>
-                  <Button
-                    onClick={handleNext}
-                    rightIcon={<ChevronRight className="w-4 h-4" />}
-                  >
-                    {currentQuestionIndex < (session?.totalQuestions || 0) - 1
-                      ? '다음 질문'
-                      : '면접 완료'}
-                  </Button>
+                  <div className="flex gap-2">
+                    {followUpQuestion && (
+                      <Button
+                        variant="secondary"
+                        onClick={handleAnswerFollowUp}
+                        isLoading={isAddingFollowUp}
+                        leftIcon={<MessageSquare className="w-4 h-4" />}
+                      >
+                        꼬리 질문 답변하기
+                      </Button>
+                    )}
+                    <Button
+                      onClick={handleNext}
+                      rightIcon={<ChevronRight className="w-4 h-4" />}
+                    >
+                      {currentQuestionIndex < (session?.totalQuestions || 0) - 1
+                        ? '다음 질문'
+                        : '면접 완료'}
+                    </Button>
+                  </div>
                 </motion.div>
               )}
             </Card>

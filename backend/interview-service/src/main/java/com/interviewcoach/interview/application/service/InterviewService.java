@@ -1,5 +1,6 @@
 package com.interviewcoach.interview.application.service;
 
+import com.interviewcoach.interview.application.dto.request.AddFollowUpRequest;
 import com.interviewcoach.interview.application.dto.request.StartInterviewRequest;
 import com.interviewcoach.interview.application.dto.request.SubmitAnswerRequest;
 import com.interviewcoach.interview.application.dto.response.InterviewListResponse;
@@ -139,6 +140,38 @@ public class InterviewService {
         log.info("Completed interview: sessionId={}, avgScore={}", sessionId, avgScore);
 
         return InterviewSessionResponse.fromWithQna(session);
+    }
+
+    @Transactional
+    public QnaResponse addFollowUpQuestion(Long sessionId, AddFollowUpRequest request) {
+        InterviewSession session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new InterviewNotFoundException(sessionId));
+
+        if (!session.isInProgress()) {
+            throw new InterviewAlreadyCompletedException(sessionId);
+        }
+
+        InterviewQna parentQna = qnaRepository.findById(request.getParentQnaId())
+                .orElseThrow(() -> new QnaNotFoundException(sessionId, request.getParentQnaId().intValue()));
+
+        int nextOrder = session.getQnaList().size() + 1;
+
+        InterviewQna followUpQna = InterviewQna.builder()
+                .questionOrder(nextOrder)
+                .questionType("follow_up")
+                .questionText(request.getQuestionText())
+                .parentQnaId(request.getParentQnaId())
+                .followUpDepth(request.getFollowUpDepth())
+                .isFollowUp(true)
+                .build();
+
+        session.addQna(followUpQna);
+        sessionRepository.save(session);
+
+        log.info("Added follow-up question to session={}, parentQnaId={}, depth={}",
+                sessionId, request.getParentQnaId(), request.getFollowUpDepth());
+
+        return QnaResponse.from(followUpQna);
     }
 
     private BigDecimal calculateAvgScore(List<InterviewQna> qnaList) {

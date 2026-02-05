@@ -44,6 +44,17 @@ public class InterviewQna {
     @Column(name = "answered_at")
     private LocalDateTime answeredAt;
 
+    @Column(name = "parent_qna_id")
+    private Long parentQnaId;
+
+    @Column(name = "follow_up_depth")
+    @Builder.Default
+    private Integer followUpDepth = 0;
+
+    @Column(name = "is_follow_up")
+    @Builder.Default
+    private Boolean isFollowUp = false;
+
     public void submitAnswer(String answerText) {
         this.answerText = answerText;
         this.answeredAt = LocalDateTime.now();

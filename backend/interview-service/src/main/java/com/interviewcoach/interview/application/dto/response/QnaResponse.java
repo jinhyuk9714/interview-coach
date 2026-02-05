@@ -18,6 +18,9 @@ public class QnaResponse {
     private String answerText;
     private Map<String, Object> feedback;
     private LocalDateTime answeredAt;
+    private Long parentQnaId;
+    private Integer followUpDepth;
+    private Boolean isFollowUp;
 
     public static QnaResponse from(InterviewQna qna) {
         return QnaResponse.builder()
@@ -28,6 +31,9 @@ public class QnaResponse {
                 .answerText(qna.getAnswerText())
                 .feedback(qna.getFeedback())
                 .answeredAt(qna.getAnsweredAt())
+                .parentQnaId(qna.getParentQnaId())
+                .followUpDepth(qna.getFollowUpDepth())
+                .isFollowUp(qna.getIsFollowUp())
                 .build();
     }
 }
