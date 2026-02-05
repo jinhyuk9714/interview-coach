@@ -106,6 +106,9 @@ export const interviewApi = {
     api.put(`/api/v1/interviews/${id}/qna/${questionOrder}/feedback`, feedback),
 
   complete: (id: number) => api.post(`/api/v1/interviews/${id}/complete`),
+
+  addFollowUp: (id: number, data: { parentQnaId: number; questionText: string; followUpDepth: number; focusArea?: string }) =>
+    api.post(`/api/v1/interviews/${id}/follow-up`, data),
 };
 
 // Feedback API
@@ -124,7 +127,7 @@ export const feedbackApi = {
   // POST stream for long answers (no URL length limit)
   streamPost: async (
     sessionId: number,
-    data: { qnaId?: number; question?: string; answer?: string },
+    data: { qnaId?: number; question?: string; answer?: string; followUpDepth?: number },
     onFeedback: (data: Record<string, unknown>) => void,
     onComplete: () => void | Promise<void>,
     onError: (error: Error) => void

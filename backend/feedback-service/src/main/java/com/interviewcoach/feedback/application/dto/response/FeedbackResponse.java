@@ -16,4 +16,6 @@ public class FeedbackResponse {
     private List<String> improvements;
     private List<String> tips;
     private String overallComment;
+    private FollowUpQuestion followUpQuestion;
+    private Boolean hasFollowUp;
 }

@@ -20,6 +20,7 @@ JD 기반 맞춤 질문 생성 + AI 모의 면접 + 실시간 피드백 시스�
 | **질문 생성** | JD + 직무 유형 기반 맞춤 면접 질문 생성 (LLM) |
 | **모의 면접** | AI 면접관과 실시간 대화형 면접 진행 |
 | **답변 피드백** | STAR 기법, 기술 정확도, 개선점 분석 (SSE 스트리밍) |
+| **꼬리 질문** | 답변 부족 시 자동 꼬리 질문 생성 (최대 2단계 깊이) |
 | **면접 기록** | 과거 면접 이력 조회, 상세 리포트 확인 |
 | **학습 통계** | 취약 분야 추적, 카테고리별 정답률, 성장 추이 |
 
@@ -394,6 +395,9 @@ erDiagram
         text answer_text
         int score
         text feedback
+        bigint parent_qna_id FK
+        int follow_up_depth
+        boolean is_follow_up
     }
 
     user_statistics {
@@ -430,7 +434,7 @@ erDiagram
 - [x] **Phase 4: 고도화**
   - [x] RAG 파이프라인 (ChromaDB + LangChain4j)
   - [x] Docker Compose 전체 스택 (한 번에 실행)
-  - [ ] 꼬리 질문 기능
+  - [x] 꼬리 질문 기능 (점수 기반 자동 생성, 최대 2단계)
   - [ ] 취약점 분석 & 추천
 - [ ] **Phase 5: 배포**
   - [ ] Kubernetes 배포
@@ -448,6 +452,8 @@ erDiagram
 | 질문 중복 방지 | RAG (ChromaDB + 로컬 임베딩 모델) |
 | 컨테이너 시간대 | UTC 날짜 파싱 유틸리티로 KST 변환 |
 | 새로고침 로그아웃 | Zustand hydration 상태 추적 |
+| 꼬리 질문 무한 루프 방지 | 최대 깊이 2 + 점수 85점 이상 시 중단 |
+| 꼬리 질문 후 원본 복귀 | 프론트엔드에서 returnToQuestionIndex 상태 관리 |
 
 ## 라이선스
 

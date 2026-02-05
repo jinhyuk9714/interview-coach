@@ -18,7 +18,7 @@ public class FeedbackService {
     private final SseEmitterManager sseEmitterManager;
     private final FeedbackLlmClient feedbackLlmClient;
 
-    public SseEmitter streamFeedback(Long sessionId, Long qnaId, String questionText, String answerText) {
+    public SseEmitter streamFeedback(Long sessionId, Long qnaId, String questionText, String answerText, int followUpDepth) {
         // Use unique key: sessionId_qnaId to prevent SSE collision when answering quickly
         String emitterKey = sessionId + "_" + (qnaId != null ? qnaId : System.currentTimeMillis());
         SseEmitter emitter = sseEmitterManager.createEmitter(emitterKey);
@@ -26,16 +26,17 @@ public class FeedbackService {
         // 비동기로 피드백 생성 및 스트리밍
         CompletableFuture.runAsync(() -> {
             try {
-                log.info("Generating feedback for session: {}, qnaId: {}, question: {}", sessionId, qnaId,
+                log.info("Generating feedback for session: {}, qnaId: {}, followUpDepth: {}, question: {}",
+                    sessionId, qnaId, followUpDepth,
                     questionText != null ? questionText.substring(0, Math.min(50, questionText.length())) + "..." : "null");
 
-                // LLM으로 피드백 생성
+                // LLM으로 피드백 생성 (꼬리 질문 포함)
                 FeedbackResponse feedback;
                 if (questionText != null && answerText != null && !answerText.isBlank()) {
-                    feedback = feedbackLlmClient.generateFeedback(sessionId, qnaId, questionText, answerText);
+                    feedback = feedbackLlmClient.generateFeedbackWithFollowUp(sessionId, qnaId, questionText, answerText, followUpDepth);
                 } else {
                     log.warn("Question or answer is null/empty, using mock feedback");
-                    feedback = feedbackLlmClient.generateFeedback(sessionId, qnaId, "", "");
+                    feedback = feedbackLlmClient.generateFeedbackWithFollowUp(sessionId, qnaId, "", "", followUpDepth);
                 }
 
                 sseEmitterManager.sendFeedback(emitterKey, feedback);

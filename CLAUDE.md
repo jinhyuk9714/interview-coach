@@ -133,6 +133,7 @@ cd frontend/web && npm run dev
 |--------|----------|------|
 | POST | `/api/interviews/start` | 면접 세션 시작 |
 | POST | `/api/interviews/{id}/answer` | 답변 제출 |
+| POST | `/api/interviews/{id}/follow-up` | 꼬리 질문 추가 |
 | POST | `/api/interviews/{id}/complete` | 면접 완료 |
 | GET | `/api/interviews` | 면접 기록 목록 |
 | GET | `/api/interviews/{id}` | 면접 상세 조회 |
@@ -140,8 +141,13 @@ cd frontend/web && npm run dev
 ### 피드백 (feedback-service)
 | Method | Endpoint | 설명 |
 |--------|----------|------|
-| GET | `/api/feedback/{interviewId}` | 피드백 조회 (SSE) |
+| GET/POST | `/api/feedback/session/{id}/stream` | 피드백 + 꼬리 질문 조회 (SSE) |
 | GET | `/api/statistics/me` | 내 통계 조회 |
+
+### 꼬리 질문 (Follow-up Question)
+- **생성 조건**: 답변 점수 < 85점, 깊이 < 2
+- **피드백 응답에 포함**: `followUpQuestion`, `hasFollowUp` 필드
+- **동작 흐름**: 답변 → 피드백 + 꼬리 질문 생성 → 꼬리 질문 답변 → 원본 다음 질문으로 복귀
 
 ## 데이터베이스 스키마
 
@@ -157,7 +163,7 @@ job_descriptions (id, user_id, company, position, description, skills JSONB)
 interview_sessions (id, user_id, jd_id, status, started_at, completed_at)
 
 -- 면접 Q&A
-interview_qna (id, session_id, question, answer, feedback JSONB, sequence)
+interview_qna (id, session_id, question, answer, feedback JSONB, sequence, parent_qna_id, follow_up_depth, is_follow_up)
 
 -- 생성된 질문
 generated_questions (id, jd_id, question, category, difficulty)
