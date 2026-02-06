@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Button, Card, Input } from '@/components/ui';
 import { useAuthStore } from '@/stores/auth';
 import { userApi } from '@/lib/api';
@@ -16,6 +17,7 @@ import {
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function ProfilePage() {
   const { user, setUser } = useAuthStore();
@@ -23,65 +25,56 @@ export default function ProfilePage() {
   const [nickname, setNickname] = useState('');
   const [targetPosition, setTargetPosition] = useState('');
   const [experienceYears, setExperienceYears] = useState<number | ''>('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: profileData, isLoading } = useQuery<any>({
+    queryKey: ['profile'],
+    queryFn: () => userApi.getProfile().then(res => res.data),
+  });
+
   useEffect(() => {
-    const fetchProfile = async () => {
-      setIsLoading(true);
-      try {
-        const response = await userApi.getProfile();
-        const data = response.data;
-        setNickname(data.nickname || '');
-        setTargetPosition(data.targetPosition || '');
-        setExperienceYears(data.experienceYears ?? '');
-      } catch (err) {
-        console.error('Failed to fetch profile:', err);
-        // Fallback to local state
-        if (user) {
-          setNickname(user.nickname || '');
-          setTargetPosition(user.targetPosition || '');
-          setExperienceYears(user.experienceYears ?? '');
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    if (profileData) {
+      setNickname(profileData.nickname || '');
+      setTargetPosition(profileData.targetPosition || '');
+      setExperienceYears(profileData.experienceYears ?? '');
+    } else if (user) {
+      setNickname(user.nickname || '');
+      setTargetPosition(user.targetPosition || '');
+      setExperienceYears(user.experienceYears ?? '');
+    }
+  }, [profileData, user]);
 
-    fetchProfile();
-  }, [user]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSaving(true);
-    setError(null);
-    setSuccess(false);
-
-    try {
-      const response = await userApi.updateProfile({
-        nickname: nickname || undefined,
-        targetPosition: targetPosition || undefined,
-        experienceYears: experienceYears !== '' ? experienceYears : undefined,
-      });
-
-      // Update local user state
+  const updateMutation = useMutation({
+    mutationFn: (data: { nickname?: string; targetPosition?: string; experienceYears?: number }) =>
+      userApi.updateProfile(data),
+    onSuccess: (response) => {
       setUser({
         ...user!,
         nickname: response.data.nickname,
         targetPosition: response.data.targetPosition,
         experienceYears: response.data.experienceYears,
       });
-
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-    } catch (err) {
-      console.error('Failed to update profile:', err);
+      toast.success('프로필이 업데이트되었습니다.');
+    },
+    onError: () => {
       setError('프로필 업데이트에 실패했습니다. 다시 시도해주세요.');
-    } finally {
-      setIsSaving(false);
-    }
+      toast.error('프로필 업데이트에 실패했습니다.');
+    },
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(false);
+    updateMutation.mutate({
+      nickname: nickname || undefined,
+      targetPosition: targetPosition || undefined,
+      experienceYears: experienceYears !== '' ? experienceYears : undefined,
+    });
   };
 
   if (isLoading) {
@@ -215,7 +208,7 @@ export default function ProfilePage() {
               <div className="pt-4 border-t-2 border-neutral-200">
                 <Button
                   type="submit"
-                  isLoading={isSaving}
+                  isLoading={updateMutation.isPending}
                   leftIcon={<Save className="w-4 h-4" />}
                   className="w-full"
                 >

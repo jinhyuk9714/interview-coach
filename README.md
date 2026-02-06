@@ -93,8 +93,10 @@ flowchart TB
 - TypeScript
 - Tailwind CSS
 - Zustand (상태 관리)
-- React Query (서버 상태 캐싱)
+- React Query (서버 상태 캐싱, 전 페이지 표준화)
 - Framer Motion (애니메이션)
+- sonner (Toast 알림)
+- Vitest + Testing Library (프론트엔드 테스트)
 
 ### Infra & DevOps
 - Docker / Docker Compose
@@ -199,6 +201,10 @@ cd backend && ./gradlew test
 ./gradlew :question-service:test
 ./gradlew :feedback-service:test
 ./gradlew :interview-service:test
+
+# 프론트엔드 테스트
+cd frontend/web && npm test        # watch 모드
+cd frontend/web && npm run test:run # 단일 실행 (33개 테스트)
 ```
 
 ## API 명세
@@ -508,6 +514,13 @@ erDiagram
   - [x] HPA 자동 스케일링 (gateway, question-service, feedback-service)
   - [x] Network Policy (zero-trust: gateway만 백엔드 접근)
   - [x] minikube 로컬 배포 스크립트
+- [x] **Phase 7: UX 개선 & 품질 강화**
+  - [x] Toast 알림 시스템 (sonner, 6개 페이지 적용)
+  - [x] 스켈레톤 로딩 (대시보드, 히스토리, 통계)
+  - [x] 백엔드 입력 검증 강화 (@Validated, @Positive, @Size, ConstraintViolationException 핸들러)
+  - [x] Axios 토큰 갱신 Race Condition 수정 (Mutex 패턴)
+  - [x] React Query 전 페이지 표준화 (useQuery/useMutation)
+  - [x] 프론트엔드 테스트 기반 구축 (Vitest + Testing Library, 33개 테스트)
 
 ## 기술적 도전
 
@@ -533,6 +546,9 @@ erDiagram
 | HikariCP 커넥션 부족 | 서비스별 풀 차등 할당 (10~20) |
 | 프론트엔드 API 중복 호출 | React Query `staleTime` + 캐싱 |
 | 임베딩 순차 처리 (20개 = 2초) | `embedAll()` 배치 API (0.4초) |
+| 동시 토큰 갱신 Race Condition | Mutex 패턴 (isRefreshing + failedQueue) |
+| 잘못된 입력이 서비스까지 도달 | `@Validated` + `@Positive`/`@Size` 컨트롤러 단 차단 |
+| 사용자 액션 피드백 부재 | sonner Toast 알림 + Skeleton 로딩 |
 
 ## 라이선스
 

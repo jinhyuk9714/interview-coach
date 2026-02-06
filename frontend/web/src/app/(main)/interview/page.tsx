@@ -27,6 +27,7 @@ import {
   EyeOff
 } from 'lucide-react';
 import type { InterviewQna, QnaFeedback, GeneratedQuestion, JobDescription, FollowUpQuestion } from '@/types';
+import { toast } from 'sonner';
 
 // Track question with its skill category for statistics
 interface QuestionWithCategory {
@@ -98,8 +99,8 @@ export default function InterviewPage() {
         try {
           const response = await jdApi.list();
           setJdList(response.data || []);
-        } catch (err) {
-          console.error('Failed to load JD list:', err);
+        } catch {
+          // Non-critical: JD list load failure
         } finally {
           setIsLoadingJds(false);
         }
@@ -116,8 +117,8 @@ export default function InterviewPage() {
         try {
           const response = await questionApi.listByJd(targetJdId);
           setAvailableQuestions(response.data || []);
-        } catch (err) {
-          console.error('Failed to load questions:', err);
+        } catch {
+          // Non-critical: question load failure
         }
       }
     };
@@ -173,8 +174,8 @@ export default function InterviewPage() {
     try {
       await interviewApi.pause(session.id);
       setIsPaused(true);
-    } catch (err) {
-      console.error('Failed to pause interview:', err);
+    } catch {
+      // Pause failure handled silently
     }
   };
 
@@ -184,8 +185,8 @@ export default function InterviewPage() {
     try {
       await interviewApi.resume(session.id);
       setIsPaused(false);
-    } catch (err) {
-      console.error('Failed to resume interview:', err);
+    } catch {
+      // Resume failure handled silently
     }
   };
 
@@ -234,8 +235,8 @@ export default function InterviewPage() {
       setIsStarted(true);
       // A-3: Reset timer on start
       setTimeRemaining(timerDuration);
-    } catch (err) {
-      console.error('Failed to start interview:', err);
+    } catch {
+      // Error handled via UI state
       setError('면접 시작에 실패했습니다. 다시 시도해주세요.');
     } finally {
       setIsLoading(false);
@@ -305,8 +306,8 @@ export default function InterviewPage() {
             // Save feedback to interview-service for persistence
             try {
               await interviewApi.updateFeedback(session.id, currentQuestionIndex + 1, feedbackData);
-            } catch (err) {
-              console.error('Failed to save feedback:', err);
+            } catch {
+              // Non-critical: feedback persistence failure
             }
 
             // Record statistics immediately (don't wait until interview end)
@@ -317,14 +318,14 @@ export default function InterviewPage() {
                 score: feedbackData.score,
                 weakPoint: feedbackData.score < 60 ? feedbackData.improvements[0] : undefined,
               });
-            } catch (statsErr) {
-              console.error('Failed to record statistics:', statsErr);
+            } catch {
+              // Non-critical: statistics recording failure
             }
           }
         },
         // onError callback
-        async (error) => {
-          console.error('SSE error:', error);
+        async () => {
+          // SSE stream error - fallback to placeholder feedback
           setIsStreaming(false);
           // If we didn't get feedback from SSE, create a placeholder
           if (!feedbackData) {
@@ -341,8 +342,8 @@ export default function InterviewPage() {
             if (session) {
               try {
                 await interviewApi.updateFeedback(session.id, currentQuestionIndex + 1, feedbackData);
-              } catch (err) {
-                console.error('Failed to save fallback feedback:', err);
+              } catch {
+                // Non-critical: fallback feedback persistence failure
               }
 
               // Record statistics even on error (so it counts in stats)
@@ -353,17 +354,17 @@ export default function InterviewPage() {
                   score: feedbackData.score,
                   weakPoint: feedbackData.score < 60 ? feedbackData.improvements[0] : undefined,
                 });
-              } catch (statsErr) {
-                console.error('Failed to record statistics on error:', statsErr);
+              } catch {
+                // Non-critical: statistics recording failure on error path
               }
             }
           }
         }
       );
 
-    } catch (err) {
-      console.error('Submit answer error:', err);
+    } catch {
       setError('답변 제출에 실패했습니다. 다시 시도해주세요.');
+      toast.error('답변 제출에 실패했습니다.');
       setShowFeedback(false);
       setIsStreaming(false);
     } finally {
@@ -406,11 +407,12 @@ export default function InterviewPage() {
       if (session) {
         try {
           await interviewApi.complete(session.id);
-        } catch (err) {
-          console.error('Failed to complete interview:', err);
+        } catch {
+          // Non-critical: complete API call failure
         }
       }
       setIsCompleted(true);
+      toast.success('면접이 완료되었습니다!');
     }
   };
 
@@ -451,8 +453,8 @@ export default function InterviewPage() {
       setStreamingFeedback('');
       setFollowUpQuestion(null);
       setShowIdealAnswer(false);
-    } catch (err) {
-      console.error('Failed to add follow-up question:', err);
+    } catch {
+      // Error handled via UI state
       setError('꼬리 질문 추가에 실패했습니다.');
     } finally {
       setIsAddingFollowUp(false);

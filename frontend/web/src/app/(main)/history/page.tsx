@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { motion } from 'motion/react';
-import { Card, Button, Tag, ScoreRing } from '@/components/ui';
+import { useQuery } from '@tanstack/react-query';
+import { Card, Button, Tag, ScoreRing, Skeleton } from '@/components/ui';
 import { interviewApi } from '@/lib/api';
 import { formatDate, formatTime } from '@/lib/utils';
 import {
@@ -18,6 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth';
+import { toast } from 'sonner';
 
 interface InterviewRecord {
   id: number;
@@ -31,34 +33,18 @@ interface InterviewRecord {
 }
 
 export default function HistoryPage() {
-  const [interviews, setInterviews] = useState<InterviewRecord[]>([]);
   const [filteredInterviews, setFilteredInterviews] = useState<InterviewRecord[] | null>(null);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const { user, accessToken } = useAuthStore();
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    const loadInterviews = async () => {
-      try {
-        console.log('Current user:', user);
-        console.log('Has access token:', !!accessToken);
-        console.log('Fetching interview history...');
-        const response = await interviewApi.list();
-        console.log('Interview API response:', response.data);
-        setInterviews(response.data.interviews || []);
-      } catch (err) {
-        console.error('Failed to load interviews:', err);
-        setError('면접 기록을 불러오는데 실패했습니다.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadInterviews();
-  }, [user, accessToken]);
+  const { data: interviews = [], isLoading, error: fetchError } = useQuery<InterviewRecord[]>({
+    queryKey: ['interviews', user?.id],
+    queryFn: () => interviewApi.list().then(res => res.data.interviews || []),
+    enabled: !!accessToken,
+  });
+  const error = fetchError ? '면접 기록을 불러오는데 실패했습니다.' : null;
 
   const handleSearch = useCallback(async (keyword: string) => {
     const trimmed = keyword.trim();
@@ -71,9 +57,9 @@ export default function HistoryPage() {
     try {
       const response = await interviewApi.search(trimmed);
       setFilteredInterviews(response.data.interviews || []);
-    } catch (err) {
-      console.error('Search failed:', err);
+    } catch {
       setFilteredInterviews(null);
+      toast.error('검색에 실패했습니다.');
     } finally {
       setIsSearching(false);
     }
@@ -143,11 +129,32 @@ export default function HistoryPage() {
 
   if (isLoading) {
     return (
-      <div className="py-12">
+      <div className="py-8">
         <div className="max-w-4xl mx-auto px-4">
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-neutral-400" />
-            <span className="ml-3 text-neutral-500">면접 기록을 불러오는 중...</span>
+          <div className="mb-8">
+            <Skeleton className="h-10 w-48 mb-2" />
+            <Skeleton className="h-5 w-72" />
+          </div>
+          <div className="grid grid-cols-3 gap-4 mb-8">
+            {[...Array(3)].map((_, i) => (
+              <Card key={i} className="p-4 text-center">
+                <Skeleton className="h-9 w-12 mx-auto mb-1" />
+                <Skeleton className="h-4 w-20 mx-auto" />
+              </Card>
+            ))}
+          </div>
+          <div className="space-y-3">
+            {[...Array(5)].map((_, i) => (
+              <Card key={i} className="p-4">
+                <div className="flex items-center gap-4">
+                  <Skeleton className="w-12 h-12 rounded-full" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-1/3" />
+                    <Skeleton className="h-3 w-1/4" />
+                  </div>
+                </div>
+              </Card>
+            ))}
           </div>
         </div>
       </div>
@@ -197,6 +204,7 @@ export default function HistoryPage() {
               onChange={(e) => handleSearchInputChange(e.target.value)}
               onKeyDown={handleSearchKeyDown}
               placeholder="면접 기록 검색 (키워드 입력 후 Enter)"
+              aria-label="면접 기록 검색"
               className="input-brutal w-full pl-10 pr-10"
             />
             {searchKeyword && (

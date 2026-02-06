@@ -22,16 +22,45 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor - handle token refresh
+// Token refresh mutex to prevent race conditions
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (token: string) => void;
+  reject: (error: Error) => void;
+}> = [];
+
+const processQueue = (error: Error | null, token: string | null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token!);
+    }
+  });
+  failedQueue = [];
+};
+
+// Response interceptor - handle token refresh with mutex
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config;
 
     if (error.response?.status === 401 && originalRequest) {
+      // If already refreshing, queue this request
+      if (isRefreshing) {
+        return new Promise<string>((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then((token) => {
+          originalRequest.headers.Authorization = `Bearer ${token}`;
+          return api(originalRequest);
+        });
+      }
+
       const refreshToken = useAuthStore.getState().refreshToken;
 
       if (refreshToken) {
+        isRefreshing = true;
         try {
           const response = await axios.post(`${API_BASE_URL}/api/v1/auth/refresh`, {
             refreshToken,
@@ -40,11 +69,16 @@ api.interceptors.response.use(
           const { accessToken, refreshToken: newRefreshToken } = response.data;
           useAuthStore.getState().setTokens(accessToken, newRefreshToken);
 
+          processQueue(null, accessToken);
+
           originalRequest.headers.Authorization = `Bearer ${accessToken}`;
           return api(originalRequest);
-        } catch {
+        } catch (refreshError) {
+          processQueue(refreshError instanceof Error ? refreshError : new Error('Token refresh failed'), null);
           useAuthStore.getState().logout();
           window.location.href = '/login';
+        } finally {
+          isRefreshing = false;
         }
       } else {
         useAuthStore.getState().logout();

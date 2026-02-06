@@ -16,6 +16,7 @@ public class CreateJdRequest {
     private String position;
 
     @NotBlank(message = "JD 내용은 필수입니다")
+    @Size(min = 50, max = 10000, message = "JD 내용은 50자 이상 10000자 이내여야 합니다")
     private String originalText;
 
     @Size(max = 500, message = "URL은 500자 이하여야 합니다")
