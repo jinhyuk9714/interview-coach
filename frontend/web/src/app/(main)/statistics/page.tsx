@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useMemo } from 'react';
 import { motion } from 'motion/react';
-import { Card, ScoreRing } from '@/components/ui';
+import { useQuery } from '@tanstack/react-query';
+import { Card, ScoreRing, Skeleton } from '@/components/ui';
 import { statisticsApi, interviewApi } from '@/lib/api';
 import {
   TrendingUp,
@@ -14,7 +15,6 @@ import {
   Zap,
   ChevronUp,
   ChevronDown,
-  Loader2
 } from 'lucide-react';
 
 interface OverallStats {
@@ -63,112 +63,6 @@ const categoryColors = [
 ];
 
 export default function StatisticsPage() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [overallStats, setOverallStats] = useState<OverallStats>({
-    totalInterviews: 0,
-    totalQuestions: 0,
-    avgScore: 0,
-    scoreTrend: 0,
-    streakDays: 0,
-    rank: '-',
-  });
-  const [categoryStats, setCategoryStats] = useState<CategoryStat[]>([]);
-  const [weeklyActivity, setWeeklyActivity] = useState<Array<{ day: string; count: number; score: number }>>([]);
-  const [recentProgress, setRecentProgress] = useState<Array<{ date: string; score: number }>>([]);
-  const [weakPoints, setWeakPoints] = useState<WeakPoint[]>([]);
-  const [achievements, setAchievements] = useState<Achievement[]>(defaultAchievements);
-
-  useEffect(() => {
-    const fetchStatistics = async () => {
-      setIsLoading(true);
-      try {
-        const [statsRes, interviewsRes] = await Promise.allSettled([
-          statisticsApi.get(),
-          interviewApi.list(),
-        ]);
-
-        // Process overall stats
-        if (statsRes.status === 'fulfilled' && statsRes.value.data) {
-          const data = statsRes.value.data;
-
-          // Debug logging
-          console.log('Statistics API response:', data);
-          console.log('Category stats from API:', data.categoryStats);
-          console.log('Weak points from API:', data.weakPoints);
-
-          setOverallStats({
-            totalInterviews: data.totalInterviews || 0,
-            totalQuestions: data.totalQuestions || 0,
-            avgScore: data.avgScore || 0,
-            scoreTrend: data.scoreTrend || 0,
-            streakDays: data.streakDays || 0,
-            rank: data.rank || getRank(data.avgScore || 0),
-          });
-
-          if (data.categoryStats && data.categoryStats.length > 0) {
-            const mappedStats = data.categoryStats.map((cat: CategoryStat, i: number) => ({
-              category: cat.category,
-              score: cat.score,
-              total: cat.total,
-              trend: cat.trend || 0,
-              color: categoryColors[i % categoryColors.length],
-            }));
-            console.log('Mapped category stats:', mappedStats);
-            setCategoryStats(mappedStats);
-          }
-
-          if (data.weeklyActivity) {
-            setWeeklyActivity(data.weeklyActivity);
-          }
-
-          if (data.recentProgress) {
-            setRecentProgress(data.recentProgress);
-          }
-
-          if (data.weakPoints && data.weakPoints.length > 0) {
-            console.log('Setting weak points:', data.weakPoints);
-            setWeakPoints(data.weakPoints);
-          } else {
-            console.log('No weak points in API response');
-          }
-
-          // Update achievements based on stats
-          const updatedAchievements = [...defaultAchievements];
-          if (data.totalInterviews >= 1) updatedAchievements[0].unlocked = true;
-          if (data.totalQuestions >= 10) updatedAchievements[1].unlocked = true;
-          if (data.avgScore >= 90) updatedAchievements[2].unlocked = true;
-          if (data.totalQuestions >= 100) updatedAchievements[3].unlocked = true;
-          setAchievements(updatedAchievements);
-        } else if (interviewsRes.status === 'fulfilled') {
-          // Fallback: calculate from interviews
-          const interviews = interviewsRes.value.data || [];
-          const completedInterviews = interviews.filter((i: { status: string }) => i.status === 'completed');
-          const totalScore = completedInterviews.reduce((acc: number, i: { score?: number }) => acc + (i.score || 0), 0);
-          const avgScore = completedInterviews.length > 0 ? Math.round(totalScore / completedInterviews.length) : 0;
-
-          setOverallStats({
-            totalInterviews: interviews.length,
-            totalQuestions: interviews.length * 5, // Approximate
-            avgScore,
-            scoreTrend: 0,
-            streakDays: 0,
-            rank: getRank(avgScore),
-          });
-
-          const updatedAchievements = [...defaultAchievements];
-          if (interviews.length >= 1) updatedAchievements[0].unlocked = true;
-          setAchievements(updatedAchievements);
-        }
-      } catch (err) {
-        console.error('Failed to fetch statistics:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchStatistics();
-  }, []);
-
   const getRank = (score: number): string => {
     if (score >= 90) return 'S';
     if (score >= 80) return 'A';
@@ -177,6 +71,67 @@ export default function StatisticsPage() {
     if (score >= 50) return 'D';
     return '-';
   };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: statsData, isLoading: isStatsLoading } = useQuery<any>({
+    queryKey: ['statistics'],
+    queryFn: () => statisticsApi.get().then(res => res.data),
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: interviewsData } = useQuery<any>({
+    queryKey: ['interviews'],
+    queryFn: () => interviewApi.list().then(res => res.data),
+  });
+
+  const isLoading = isStatsLoading;
+
+  const { overallStats, categoryStats, weeklyActivity, recentProgress, weakPoints, achievements } = useMemo(() => {
+    const defaultOverall: OverallStats = { totalInterviews: 0, totalQuestions: 0, avgScore: 0, scoreTrend: 0, streakDays: 0, rank: '-' };
+    let overall = defaultOverall;
+    let cats: CategoryStat[] = [];
+    let weekly: Array<{ day: string; count: number; score: number }> = [];
+    let progress: Array<{ date: string; score: number }> = [];
+    let weak: WeakPoint[] = [];
+    const achs = [...defaultAchievements];
+
+    if (statsData) {
+      const data = statsData;
+      overall = {
+        totalInterviews: data.totalInterviews || 0,
+        totalQuestions: data.totalQuestions || 0,
+        avgScore: data.avgScore || 0,
+        scoreTrend: data.scoreTrend || 0,
+        streakDays: data.streakDays || 0,
+        rank: data.rank || getRank(data.avgScore || 0),
+      };
+
+      if (data.categoryStats?.length > 0) {
+        cats = data.categoryStats.map((cat: CategoryStat, i: number) => ({
+          category: cat.category, score: cat.score, total: cat.total,
+          trend: cat.trend || 0, color: categoryColors[i % categoryColors.length],
+        }));
+      }
+      if (data.weeklyActivity) weekly = data.weeklyActivity;
+      if (data.recentProgress) progress = data.recentProgress;
+      if (data.weakPoints?.length > 0) weak = data.weakPoints;
+
+      if (data.totalInterviews >= 1) achs[0].unlocked = true;
+      if (data.totalQuestions >= 10) achs[1].unlocked = true;
+      if (data.avgScore >= 90) achs[2].unlocked = true;
+      if (data.totalQuestions >= 100) achs[3].unlocked = true;
+    } else if (interviewsData) {
+      const interviews = Array.isArray(interviewsData) ? interviewsData : (interviewsData.interviews || []);
+      const completed = interviews.filter((i: { status: string }) => i.status === 'completed');
+      const totalScore = completed.reduce((acc: number, i: { score?: number }) => acc + (i.score || 0), 0);
+      const avgScore = completed.length > 0 ? Math.round(totalScore / completed.length) : 0;
+      overall = { totalInterviews: interviews.length, totalQuestions: interviews.length * 5, avgScore, scoreTrend: 0, streakDays: 0, rank: getRank(avgScore) };
+      if (interviews.length >= 1) achs[0].unlocked = true;
+    }
+
+    return { overallStats: overall, categoryStats: cats, weeklyActivity: weekly, recentProgress: progress, weakPoints: weak, achievements: achs };
+  }, [statsData, interviewsData]);
+
   return (
     <div className="py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -193,9 +148,42 @@ export default function StatisticsPage() {
         </motion.div>
 
         {isLoading && (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-neutral-400" />
-            <p className="ml-3 text-neutral-500">통계를 불러오는 중...</p>
+          <div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              {[...Array(4)].map((_, i) => (
+                <Card key={i} className="p-5">
+                  <Skeleton className="h-4 w-16 mb-4" />
+                  <Skeleton className="h-9 w-12 mb-1" />
+                  <Skeleton className="h-3 w-8" />
+                </Card>
+              ))}
+            </div>
+            <div className="grid lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-2 space-y-8">
+                <Card className="p-6">
+                  <Skeleton className="h-6 w-40 mb-6" />
+                  <div className="space-y-4">
+                    {[...Array(4)].map((_, i) => (
+                      <div key={i}>
+                        <Skeleton className="h-4 w-1/3 mb-2" />
+                        <Skeleton className="h-3 w-full" />
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+                <Card className="p-6">
+                  <Skeleton className="h-6 w-32 mb-6" />
+                  <Skeleton className="h-40 w-full" />
+                </Card>
+              </div>
+              <div className="space-y-8">
+                <Card className="p-6 text-center">
+                  <Skeleton className="h-4 w-20 mx-auto mb-4" />
+                  <Skeleton className="h-24 w-24 mx-auto rounded-full mb-4" />
+                  <Skeleton className="h-8 w-16 mx-auto" />
+                </Card>
+              </div>
+            </div>
           </div>
         )}
 

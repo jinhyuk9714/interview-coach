@@ -40,8 +40,10 @@ interview-coach/
 - **TypeScript 5.x**
 - **Tailwind CSS 3.4.16**: Neo-brutalist 디자인
 - **Zustand 5.0.11**: 상태 관리
-- **@tanstack/react-query**: 서버 상태 캐싱, API 중복 호출 방지
-- **Axios 1.7.9**: HTTP 클라이언트
+- **@tanstack/react-query**: 서버 상태 캐싱, API 중복 호출 방지 (전 페이지 표준화)
+- **Axios 1.7.9**: HTTP 클라이언트 (토큰 갱신 Mutex 패턴)
+- **sonner**: Toast 알림 (Neo-brutalist 스타일)
+- **Vitest + Testing Library**: 프론트엔드 테스트 (33개)
 
 ### LLM
 - **Claude API**: claude-sonnet-4-20250514 (Primary)
@@ -294,7 +296,9 @@ service/
   - `authStore`: 인증 상태, 토큰 관리
   - `interviewStore`: 면접 세션 상태
 - **React Query**: 서버 데이터 캐싱 (`staleTime` 설정, 중복 요청 제거)
-- **Axios 인터셉터**: 자동 토큰 첨부, 401 처리
+- **Axios 인터셉터**: 자동 토큰 첨부, 401 처리 (Mutex 패턴으로 동시 갱신 방지)
+- **Toast 알림**: sonner 라이브러리, 모든 CUD 액션에 성공/실패 피드백
+- **스켈레톤 로딩**: 대시보드, 히스토리, 통계 페이지
 
 ## 프론트엔드 구조
 
@@ -337,11 +341,15 @@ cd infra/docker && docker-compose up -d --build
 
 ### 테스트
 ```bash
-# 단위 테스트
+# 백엔드 단위 테스트
 cd backend && ./gradlew test
 
 # 특정 서비스 테스트
 cd backend && ./gradlew :question-service:test
+
+# 프론트엔드 테스트
+cd frontend/web && npm test        # watch 모드
+cd frontend/web && npm run test:run # 단일 실행
 ```
 
 ### CI/CD
@@ -361,8 +369,11 @@ cd backend && ./gradlew :question-service:test
 | SSE 메모리 누수 | TTL 기반 정리 + max 5,000 제한 | 힙 안정화 |
 | JVM/GC | ZGC + 서비스별 힙 사이징 | GC Pause 2s → 5ms |
 | HikariCP | 서비스별 풀 차등 할당 | Connection Wait 감소 |
-| 프론트엔드 | React Query 캐싱 | API 요청 70% 감소 |
+| 프론트엔드 | React Query 캐싱 (전 페이지 표준화) | API 요청 70% 감소 |
 | 임베딩 | `embedAll()` 배치 처리 | 2.0s → 0.4s |
+| 입력 검증 | `@Validated` + `@Positive`/`@Size` | 잘못된 입력 컨트롤러 단 차단 |
+| 토큰 갱신 | Mutex 패턴 (isRefreshing + failedQueue) | Race condition 제거 |
+| UX 피드백 | sonner Toast + Skeleton 로딩 | 사용자 체감 품질 향상 |
 
 ### JVM 설정 (Dockerfile)
 - **user/interview/gateway**: `-Xms128m -Xmx256m -XX:+UseZGC`

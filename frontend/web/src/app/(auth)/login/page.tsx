@@ -8,6 +8,7 @@ import { Button, Input } from '@/components/ui';
 import { useAuthStore } from '@/stores/auth';
 import { authApi } from '@/lib/api';
 import { ArrowRight, Mail, Lock } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -28,8 +29,12 @@ export default function LoginPage() {
       const response = await authApi.login(formData);
       const { accessToken, refreshToken } = response.data;
 
-      // Decode user info from token (simplified - in production use proper JWT decode)
-      const payload = JSON.parse(atob(accessToken.split('.')[1]));
+      // Decode user info from JWT payload
+      const base64Url = accessToken.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(decodeURIComponent(
+        atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+      ));
 
       login(
         {
@@ -43,9 +48,9 @@ export default function LoginPage() {
       );
 
       router.push('/dashboard');
-    } catch (err) {
+    } catch {
       setError('이메일 또는 비밀번호가 올바르지 않습니다.');
-      console.error('Login error:', err);
+      toast.error('로그인에 실패했습니다.');
     } finally {
       setIsLoading(false);
     }
@@ -75,12 +80,13 @@ export default function LoginPage() {
           </motion.div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6" aria-label="로그인 폼">
           <div className="relative">
             <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-400 z-10" />
             <Input
               type="email"
               placeholder="이메일"
+              aria-label="이메일"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               className="pl-12"
@@ -93,6 +99,7 @@ export default function LoginPage() {
             <Input
               type="password"
               placeholder="비밀번호"
+              aria-label="비밀번호"
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               className="pl-12"

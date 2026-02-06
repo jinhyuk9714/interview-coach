@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'motion/react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button, Card, Input, Textarea, Tag } from '@/components/ui';
 import { jdApi, questionApi, statisticsApi } from '@/lib/api';
 import {
@@ -23,11 +24,17 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import type { JobDescription, JdAnalysis, GeneratedQuestion } from '@/types';
+import { toast } from 'sonner';
 
 export default function JdPage() {
-  const [jdList, setJdList] = useState<JobDescription[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  const { data: jdList = [], isLoading, error: fetchError } = useQuery<JobDescription[]>({
+    queryKey: ['jds'],
+    queryFn: () => jdApi.list().then(res => res.data || []),
+  });
+
+  const [error, setError] = useState<string | null>(fetchError ? 'JD 목록을 불러오는데 실패했습니다.' : null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedJd, setSelectedJd] = useState<JobDescription | null>(null);
   const [analysis, setAnalysis] = useState<JdAnalysis | null>(null);
@@ -41,10 +48,8 @@ export default function JdPage() {
     originalText: '',
     originalUrl: '',
   });
-  const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<JobDescription | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
 
   // Generate modal states
   const [showGenerateModal, setShowGenerateModal] = useState(false);
@@ -57,40 +62,26 @@ export default function JdPage() {
   const [weakPoints, setWeakPoints] = useState<Array<{ category: string; score: number }>>([]);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
 
-  // Load JD list on mount
-  useEffect(() => {
-    const fetchJdList = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        const response = await jdApi.list();
-        setJdList(response.data || []);
-      } catch (err) {
-        console.error('Failed to fetch JD list:', err);
-        setError('JD 목록을 불러오는데 실패했습니다.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchJdList();
-  }, []);
+  const createMutation = useMutation({
+    mutationFn: (data: { companyName: string; position: string; originalText: string; originalUrl: string }) =>
+      jdApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['jds'] });
+      setShowCreateModal(false);
+      setNewJd({ companyName: '', position: '', originalText: '', originalUrl: '' });
+      setCreateError(null);
+      toast.success('JD가 등록되었습니다.');
+    },
+    onError: () => {
+      setCreateError('JD 등록에 실패했습니다. 다시 시도해주세요.');
+      toast.error('JD 등록에 실패했습니다.');
+    },
+  });
 
   const handleCreateJd = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsCreating(true);
     setCreateError(null);
-
-    try {
-      const response = await jdApi.create(newJd);
-      setJdList([response.data, ...jdList]);
-      setShowCreateModal(false);
-      setNewJd({ companyName: '', position: '', originalText: '', originalUrl: '' });
-    } catch (err) {
-      console.error('Failed to create JD:', err);
-      setCreateError('JD 등록에 실패했습니다. 다시 시도해주세요.');
-    } finally {
-      setIsCreating(false);
-    }
+    createMutation.mutate(newJd);
   };
 
   const handleAnalyze = async (jd: JobDescription) => {
@@ -102,8 +93,8 @@ export default function JdPage() {
     try {
       const response = await jdApi.analyze(jd.id);
       setAnalysis(response.data);
-    } catch (err) {
-      console.error('Failed to analyze JD:', err);
+      toast.success('JD 분석이 완료되었습니다.');
+    } catch {
       // Use existing parsed data if available
       if (jd.parsedSkills?.length > 0 || jd.parsedRequirements?.length > 0) {
         setAnalysis({
@@ -137,8 +128,8 @@ export default function JdPage() {
           .sort((a: { score: number }, b: { score: number }) => a.score - b.score);
         setWeakPoints(weak);
       }
-    } catch (err) {
-      console.error('Failed to fetch statistics:', err);
+    } catch {
+      // Statistics load failure is non-critical
       // 통계 로드 실패해도 모달은 표시
     } finally {
       setIsLoadingStats(false);
@@ -173,33 +164,36 @@ export default function JdPage() {
 
       const response = await questionApi.generate(requestData);
       setQuestions(response.data.questions || response.data);
-    } catch (err) {
-      console.error('Failed to generate questions:', err);
+      toast.success('질문이 생성되었습니다!');
+    } catch {
       setError('질문 생성에 실패했습니다. 다시 시도해주세요.');
+      toast.error('질문 생성에 실패했습니다.');
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const handleDeleteJd = async () => {
-    if (!deleteTarget) return;
-
-    setIsDeleting(true);
-    try {
-      await jdApi.delete(deleteTarget.id);
-      setJdList(jdList.filter(jd => jd.id !== deleteTarget.id));
-      if (selectedJd?.id === deleteTarget.id) {
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => jdApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['jds'] });
+      if (selectedJd?.id === deleteTarget?.id) {
         setSelectedJd(null);
         setAnalysis(null);
         setQuestions([]);
       }
       setDeleteTarget(null);
-    } catch (err) {
-      console.error('Failed to delete JD:', err);
+      toast.success('JD가 삭제되었습니다.');
+    },
+    onError: () => {
       setError('JD 삭제에 실패했습니다. 다시 시도해주세요.');
-    } finally {
-      setIsDeleting(false);
-    }
+      toast.error('JD 삭제에 실패했습니다.');
+    },
+  });
+
+  const handleDeleteJd = async () => {
+    if (!deleteTarget) return;
+    deleteMutation.mutate(deleteTarget.id);
   };
 
   return (
@@ -517,13 +511,13 @@ export default function JdPage() {
                   <Button
                     variant="secondary"
                     onClick={() => setDeleteTarget(null)}
-                    disabled={isDeleting}
+                    disabled={deleteMutation.isPending}
                   >
                     취소
                   </Button>
                   <Button
                     onClick={handleDeleteJd}
-                    isLoading={isDeleting}
+                    isLoading={deleteMutation.isPending}
                     className="bg-accent-coral hover:bg-accent-coral/90"
                   >
                     삭제하기
@@ -793,11 +787,11 @@ export default function JdPage() {
                       type="button"
                       variant="secondary"
                       onClick={() => setShowCreateModal(false)}
-                      disabled={isCreating}
+                      disabled={createMutation.isPending}
                     >
                       취소
                     </Button>
-                    <Button type="submit" isLoading={isCreating}>
+                    <Button type="submit" isLoading={createMutation.isPending}>
                       등록하기
                     </Button>
                   </div>

@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import { motion } from 'motion/react';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Card, CardContent, Tag, ScoreRing } from '@/components/ui';
+import { Button, Card, CardContent, Tag, ScoreRing, Skeleton } from '@/components/ui';
 import { useAuthStore } from '@/stores/auth';
 import { interviewApi, statisticsApi, jdApi } from '@/lib/api';
 import {
@@ -16,7 +16,6 @@ import {
   Zap,
   Calendar,
   ChevronRight,
-  Loader2
 } from 'lucide-react';
 import { formatDate, parseUTCDate } from '@/lib/utils';
 
@@ -241,9 +240,17 @@ export default function DashboardPage() {
 
               <div className="space-y-4">
                 {isLoading ? (
-                  <div className="p-8 text-center">
-                    <Loader2 className="w-6 h-6 animate-spin mx-auto text-neutral-400" />
-                    <p className="text-sm text-neutral-500 mt-2">불러오는 중...</p>
+                  <div className="space-y-4 p-4">
+                    {[...Array(3)].map((_, i) => (
+                      <div key={i} className="flex items-center gap-4 p-4 bg-cream">
+                        <Skeleton className="w-12 h-12" />
+                        <div className="flex-1 space-y-2">
+                          <Skeleton className="h-4 w-1/3" />
+                          <Skeleton className="h-3 w-1/4" />
+                        </div>
+                        <Skeleton className="w-10 h-10 rounded-full" />
+                      </div>
+                    ))}
                   </div>
                 ) : recentInterviews.length === 0 ? (
                   <div className="p-8 text-center text-neutral-500">

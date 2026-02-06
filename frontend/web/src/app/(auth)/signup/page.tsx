@@ -7,6 +7,7 @@ import { motion } from 'motion/react';
 import { Button, Input } from '@/components/ui';
 import { authApi } from '@/lib/api';
 import { ArrowRight, Mail, Lock, User, Sparkles } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -42,10 +43,11 @@ export default function SignupPage() {
         nickname: formData.nickname,
       });
 
+      toast.success('회원가입이 완료되었습니다! 로그인해주세요.');
       router.push('/login?registered=true');
-    } catch (err) {
+    } catch {
       setError('회원가입에 실패했습니다. 다시 시도해주세요.');
-      console.error('Signup error:', err);
+      toast.error('회원가입에 실패했습니다.');
     } finally {
       setIsLoading(false);
     }
@@ -83,7 +85,7 @@ export default function SignupPage() {
           </motion.div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-5" aria-label="회원가입 폼">
           <div className="relative">
             <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-400 z-10" />
             <Input
