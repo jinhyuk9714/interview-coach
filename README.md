@@ -21,7 +21,10 @@ JD 기반 맞춤 질문 생성 + AI 모의 면접 + 실시간 피드백 시스�
 | **모의 면접** | AI 면접관과 실시간 대화형 면접 진행 |
 | **답변 피드백** | STAR 기법, 기술 정확도, 개선점 분석 (SSE 스트리밍) |
 | **꼬리 질문** | 답변 부족 시 자동 꼬리 질문 생성 (최대 2단계 깊이) |
-| **면접 기록** | 과거 면접 이력 조회, 상세 리포트 확인 |
+| **면접 기록** | 과거 면접 이력 조회, 키워드 검색, 상세 리포트 확인 |
+| **면접 일시정지/재개** | 면접 중단 후 나중에 이어서 진행 |
+| **면접 타이머** | 질문당 3분/5분 카운트다운, 시간 초과 경고 |
+| **모범 답안** | 피드백 후 모범 답안 토글 표시 |
 | **학습 통계** | 취약 분야 추적, 카테고리별 정답률, 성장 추이 |
 | **취약 분야 우선** | 70% 미만 카테고리 자동 감지, 질문 생성 시 우선 반영 |
 | **일일 활동 기록** | 매일 답변 횟수/점수 추적, 주간 활동 그래프 |
@@ -58,8 +61,8 @@ flowchart TB
 
     Web --> GW
     GW --> US & IS & QS & FS
-    US & IS & FS --> PG
-    IS --> RD
+    US & IS & QS & FS --> PG
+    QS & FS --> RD
     QS --> CH
     QS --> LC
     LC --> LLM
@@ -90,6 +93,7 @@ flowchart TB
 - TypeScript
 - Tailwind CSS
 - Zustand (상태 관리)
+- React Query (서버 상태 캐싱)
 - Framer Motion (애니메이션)
 
 ### Infra & DevOps
@@ -104,9 +108,9 @@ flowchart TB
 |--------|------|------|
 | gateway | 8080 | API Gateway, JWT 검증, 라우팅 |
 | user-service | 8081 | 회원가입/로그인, JWT 발급 |
-| question-service | 8082 | JD 분석, 질문 생성 (LLM) |
-| interview-service | 8083 | 모의 면접 세션 관리 |
-| feedback-service | 8084 | 답변 평가, SSE 피드백, 통계 |
+| question-service | 8082 | JD 분석, 질문 생성 (LLM), Redis 캐싱 |
+| interview-service | 8083 | 모의 면접 세션 관리, 검색, 일시정지/재개 |
+| feedback-service | 8084 | 답변 평가, SSE 피드백, 통계, 비관적 락 |
 
 ## 프로젝트 구조
 
@@ -291,6 +295,15 @@ Content-Type: application/json
   "answer": "저는 SAGA 패턴을 사용해서..."
 }
 
+# 면접 기록 검색
+GET /api/v1/interviews/search?keyword=Spring
+
+# 면접 일시정지
+PATCH /api/v1/interviews/{id}/pause
+
+# 면접 재개
+PATCH /api/v1/interviews/{id}/resume
+
 # 면접 완료
 POST /api/v1/interviews/{id}/complete
 ```
@@ -317,6 +330,25 @@ X-User-Id: 1
 }
 ```
 
+## 성능 최적화
+
+10가지 성능 최적화를 적용하여 각각 **문제 상황 → 원인 분석 → 해결 → 측정** 구조로 기록했습니다.
+
+| # | 항목 | 기법 | 효과 |
+|---|------|------|------|
+| 1 | N+1 쿼리 | `LEFT JOIN FETCH` | 11 SQL → 1 SQL |
+| 2 | DB 인덱스 | 7개 복합/GIN 인덱스 | Full Scan → Index Scan |
+| 3 | Race Condition | `@Lock(PESSIMISTIC_WRITE)` | 데이터 정합성 100% |
+| 4 | Redis 캐싱 | `@Cacheable` (TTL 5분) | DB 쿼리 90% 감소 |
+| 5 | SSE 스레드 풀 | 전용 `ThreadPoolTaskExecutor` | 타임아웃 50% → 0% |
+| 6 | SSE 메모리 누수 | TTL 정리 + max 5,000 | 힙 안정화 |
+| 7 | JVM/GC | ZGC + 서비스별 힙 사이징 | GC Pause 2s → 5ms |
+| 8 | HikariCP | 서비스별 풀 차등 할당 | Connection Wait 감소 |
+| 9 | 프론트엔드 | React Query 캐싱 | API 요청 70% 감소 |
+| 10 | 임베딩 | `embedAll()` 배치 | 2.0s → 0.4s |
+
+상세 기록: [docs/performance/TUNING.md](docs/performance/TUNING.md)
+
 ## 성능 테스트
 
 ```bash
@@ -329,6 +361,11 @@ docker-compose -f docker-compose.monitoring.yml up -d
 
 # Load Test (부하 테스트)
 ./performance/scripts/run-load.sh -t load
+
+# k6 시나리오별 실행
+k6 run performance/k6/scenarios/search-load-test.js       # 검색 API 부하
+k6 run performance/k6/scenarios/concurrent-answer-test.js  # Race condition 검증
+k6 run performance/k6/scenarios/soak-test.js               # 장시간 메모리/GC 테스트
 
 # 결과 리포트 생성
 ./performance/scripts/generate-report.sh
@@ -450,7 +487,19 @@ erDiagram
   - [x] 꼬리 질문 기능 (점수 기반 자동 생성, 최대 2단계)
   - [x] 취약 분야 우선 반영 (70% 미만 카테고리 자동 감지 → 질문 생성 시 60% 비중)
   - [x] 일일 활동 기록 (주간 활동 그래프, 실제 DB 데이터 기반)
-- [ ] **Phase 5: 배포**
+- [x] **Phase 5: 성능 최적화**
+  - [x] N+1 쿼리 → Fetch Join
+  - [x] 복합/GIN 인덱스 7개 추가
+  - [x] Race Condition → 비관적 락
+  - [x] Redis 캐싱 (`@Cacheable`)
+  - [x] SSE 스레드 풀 격리 + 메모리 누수 해결
+  - [x] JVM ZGC 튜닝 + HikariCP 풀 사이징
+  - [x] React Query 프론트엔드 캐싱
+  - [x] 임베딩 배치 처리
+  - [x] 면접 검색, 일시정지/재개, 타이머, 모범답안 기능
+  - [x] k6 시나리오 3종 (검색, 동시성, Soak Test)
+  - [x] Prometheus 메트릭 (JVM, Hibernate, HikariCP)
+- [ ] **Phase 6: 배포**
   - [ ] Kubernetes 배포
   - [ ] CI/CD 파이프라인 완성
 
@@ -461,8 +510,8 @@ erDiagram
 | JD에서 핵심 정보 추출 | LLM 프롬프트 엔지니어링 + JSON 구조화 출력 |
 | 실시간 피드백 | SSE (Server-Sent Events) 스트리밍 |
 | 마이크로서비스 인증 | Gateway에서 JWT 검증 → X-User-Id 헤더 전달 |
-| LLM 비용 최적화 | Mock 모드 지원, 캐싱 (추후 Redis) |
-| 성능 측정 | k6 + InfluxDB + Grafana 대시보드 |
+| LLM 비용 최적화 | Mock 모드 지원, Redis 캐싱 (`@Cacheable` TTL 5분) |
+| 성능 측정 | k6 + InfluxDB + Grafana + Prometheus 대시보드 |
 | 질문 중복 방지 | RAG (ChromaDB + 로컬 임베딩 모델) |
 | 컨테이너 시간대 | UTC 날짜 파싱 유틸리티로 KST 변환 |
 | 새로고침 로그아웃 | Zustand hydration 상태 추적 |
@@ -470,6 +519,14 @@ erDiagram
 | 꼬리 질문 후 원본 복귀 | 프론트엔드에서 returnToQuestionIndex 상태 관리 |
 | 취약 분야 우선 반영 | 통계 API에서 70% 미만 카테고리 추출 → LLM 프롬프트에 60% 비중 지시 |
 | SVG 원형 게이지 색상 | Tailwind 클래스 대신 인라인 스타일로 동적 색상 적용 |
+| N+1 쿼리 (11 SQL → 1) | `@Query` + `LEFT JOIN FETCH`로 Eager Loading |
+| 동시 통계 업데이트 Lost Update | `@Lock(PESSIMISTIC_WRITE)` 비관적 락 |
+| SSE 스레드 고갈 (ForkJoinPool 8개) | 전용 `ThreadPoolTaskExecutor` (core:50, max:100) |
+| SseEmitter 메모리 누수 | `@Scheduled` TTL 정리 + max 5,000 제한 |
+| JVM Full GC 스파이크 (2초) | ZGC + 서비스별 힙 사이징 (`-XX:+UseZGC`) |
+| HikariCP 커넥션 부족 | 서비스별 풀 차등 할당 (10~20) |
+| 프론트엔드 API 중복 호출 | React Query `staleTime` + 캐싱 |
+| 임베딩 순차 처리 (20개 = 2초) | `embedAll()` 배치 API (0.4초) |
 
 ## 라이선스
 
