@@ -1,9 +1,14 @@
 server:
   port: 8081
+  max-http-request-header-size: 16KB
 
 spring:
   application:
     name: user-service
+  servlet:
+    multipart:
+      max-file-size: 1MB
+      max-request-size: 1MB
 
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/interview_coach}
@@ -31,13 +36,19 @@ spring:
 
 # JWT Configuration
 jwt:
-  secret: ${JWT_SECRET:your-secret-key-here-must-be-at-least-256-bits}
+  secret: ${JWT_SECRET}
   expiration: 3600000  # 1 hour
   refresh-expiration: 604800000  # 7 days
 
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui
+
 logging:
   level:
-    com.interviewcoach: DEBUG
+    com.interviewcoach: INFO
 
 # Actuator & Metrics
 management:

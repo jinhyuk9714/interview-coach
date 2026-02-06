@@ -6,10 +6,12 @@ spring:
     name: gateway
   main:
     web-application-type: reactive
+  codec:
+    max-in-memory-size: 1MB
 
 # JWT Configuration
 jwt:
-  secret: ${JWT_SECRET:your-secret-key-here-must-be-at-least-256-bits}
+  secret: ${JWT_SECRET}
 
 # Service URLs (Docker에서는 컨테이너 이름 사용)
 services:
@@ -24,8 +26,8 @@ services:
 
 logging:
   level:
-    com.interviewcoach: DEBUG
-    org.springframework.cloud.gateway: DEBUG
+    com.interviewcoach: INFO
+    org.springframework.cloud.gateway: WARN
 
 # Actuator & Metrics
 management:

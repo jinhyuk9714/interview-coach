@@ -82,6 +82,7 @@ services:
     ports:
       - "8081:8081"
     environment:
+      - SPRING_PROFILES_ACTIVE=dev
       - DATABASE_URL=jdbc:postgresql://postgres:5432/interview_coach
       - DATABASE_USERNAME=postgres
       - DATABASE_PASSWORD=postgres
@@ -106,6 +107,7 @@ services:
     ports:
       - "8082:8082"
     environment:
+      - SPRING_PROFILES_ACTIVE=dev
       - DATABASE_URL=jdbc:postgresql://postgres:5432/interview_coach
       - DATABASE_USERNAME=postgres
       - DATABASE_PASSWORD=postgres
@@ -135,6 +137,7 @@ services:
     ports:
       - "8083:8083"
     environment:
+      - SPRING_PROFILES_ACTIVE=dev
       - DATABASE_URL=jdbc:postgresql://postgres:5432/interview_coach
       - DATABASE_USERNAME=postgres
       - DATABASE_PASSWORD=postgres
@@ -158,6 +161,7 @@ services:
     ports:
       - "8084:8084"
     environment:
+      - SPRING_PROFILES_ACTIVE=dev
       - DATABASE_URL=jdbc:postgresql://postgres:5432/interview_coach
       - DATABASE_USERNAME=postgres
       - DATABASE_PASSWORD=postgres
@@ -183,6 +187,7 @@ services:
     ports:
       - "8080:8080"
     environment:
+      - SPRING_PROFILES_ACTIVE=dev
       - USER_SERVICE_URL=http://user-service:8081
       - QUESTION_SERVICE_URL=http://question-service:8082
       - INTERVIEW_SERVICE_URL=http://interview-service:8083

@@ -35,15 +35,15 @@ class RouteConfigTest {
     }
 
     @Test
-    @DisplayName("7개 라우트가 정의되어 있음")
-    void routeLocator_Has7Routes() {
+    @DisplayName("11개 라우트가 정의되어 있음 (API 7 + Swagger Docs 4)")
+    void routeLocator_Has11Routes() {
         List<String> routeIds = routeLocator.getRoutes()
                 .map(route -> route.getId())
                 .collectList()
                 .block();
 
         assertThat(routeIds).isNotNull();
-        assertThat(routeIds).hasSize(7);
+        assertThat(routeIds).hasSize(11);
         assertThat(routeIds).containsExactlyInAnyOrder(
                 "user-service-auth",
                 "user-service",
@@ -51,7 +51,11 @@ class RouteConfigTest {
                 "question-service-questions",
                 "interview-service",
                 "feedback-service",
-                "statistics-service"
+                "statistics-service",
+                "user-service-docs",
+                "question-service-docs",
+                "interview-service-docs",
+                "feedback-service-docs"
         );
     }
 }

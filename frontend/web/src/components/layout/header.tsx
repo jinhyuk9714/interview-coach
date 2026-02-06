@@ -48,7 +48,7 @@ export function Header() {
 
           {/* Desktop Navigation */}
           {isAuthenticated && (
-            <nav className="hidden md:flex items-center gap-1">
+            <nav className="hidden md:flex items-center gap-1" aria-label="메인 내비게이션">
               {navItems.map((item) => {
                 const isActive = pathname.startsWith(item.href);
                 const Icon = item.icon;
@@ -56,6 +56,7 @@ export function Header() {
                   <Link
                     key={item.href}
                     href={item.href}
+                    aria-current={isActive ? 'page' : undefined}
                     className={cn(
                       'relative px-4 py-2 font-sans text-sm font-medium uppercase tracking-wide',
                       'transition-colors duration-150',
@@ -97,6 +98,7 @@ export function Header() {
                   size="sm"
                   onClick={logout}
                   className="hidden sm:flex"
+                  aria-label="로그아웃"
                 >
                   <LogOut className="w-4 h-4" />
                 </Button>
@@ -104,6 +106,8 @@ export function Header() {
                 <button
                   onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                   className="md:hidden p-2"
+                  aria-label={mobileMenuOpen ? '메뉴 닫기' : '메뉴 열기'}
+                  aria-expanded={mobileMenuOpen}
                 >
                   {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
                 </button>
@@ -130,7 +134,7 @@ export function Header() {
           exit={{ opacity: 0, y: -10 }}
           className="md:hidden bg-white border-b-2 border-ink"
         >
-          <nav className="px-4 py-4 space-y-2">
+          <nav className="px-4 py-4 space-y-2" aria-label="모바일 내비게이션">
             {navItems.map((item) => {
               const isActive = pathname.startsWith(item.href);
               const Icon = item.icon;

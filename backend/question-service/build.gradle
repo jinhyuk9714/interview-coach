@@ -18,6 +18,9 @@ dependencies {
     // Jsoup (HTML parsing for URL crawling)
     implementation 'org.jsoup:jsoup:1.17.2'
 
+    // SpringDoc OpenAPI
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0'
+
     // Test - H2 Database
     testRuntimeOnly 'com.h2database:h2'
 }

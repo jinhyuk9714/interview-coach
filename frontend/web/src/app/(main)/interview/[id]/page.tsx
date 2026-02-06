@@ -62,8 +62,7 @@ export default function InterviewDetailPage() {
             // JD not found is not critical
           }
         }
-      } catch (err) {
-        console.error('Failed to fetch interview:', err);
+      } catch {
         setError('면접 결과를 불러오는데 실패했습니다.');
       } finally {
         setIsLoading(false);

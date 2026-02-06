@@ -79,7 +79,13 @@ public class JwtAuthenticationFilter extends AbstractGatewayFilterFactory<JwtAut
     private boolean isPublicPath(String path) {
         return path.startsWith("/api/v1/auth/") ||
                path.startsWith("/actuator/") ||
-               path.equals("/health");
+               path.equals("/health") ||
+               path.startsWith("/swagger-ui") ||
+               path.startsWith("/api-docs") ||
+               path.startsWith("/v3/api-docs") ||
+               path.startsWith("/webjars/") ||
+               path.contains("/swagger-ui") ||
+               path.contains("/api-docs");
     }
 
     private Claims validateToken(String token) {

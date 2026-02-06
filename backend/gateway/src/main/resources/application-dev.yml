@@ -1,0 +1,4 @@
+logging:
+  level:
+    com.interviewcoach: DEBUG
+    org.springframework.cloud.gateway: DEBUG
