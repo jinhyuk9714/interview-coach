@@ -1,9 +1,14 @@
 server:
   port: 8084
+  max-http-request-header-size: 16KB
 
 spring:
   application:
     name: feedback-service
+  servlet:
+    multipart:
+      max-file-size: 1MB
+      max-request-size: 1MB
 
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/interview_coach}
@@ -46,9 +51,15 @@ langchain4j:
     api-key: ${OPENAI_API_KEY:}
     model-name: gpt-4-turbo-preview
 
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui
+
 logging:
   level:
-    com.interviewcoach: DEBUG
+    com.interviewcoach: INFO
 
 # Actuator & Metrics
 management:

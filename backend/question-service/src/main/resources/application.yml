@@ -1,9 +1,14 @@
 server:
   port: 8082
+  max-http-request-header-size: 16KB
 
 spring:
   application:
     name: question-service
+  servlet:
+    multipart:
+      max-file-size: 2MB
+      max-request-size: 2MB
 
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/interview_coach}
@@ -56,10 +61,16 @@ langchain4j:
     base-url: http://${CHROMA_HOST:localhost}:${CHROMA_PORT:8000}
     collection-name: interview-questions
 
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui
+
 logging:
   level:
-    com.interviewcoach: DEBUG
-    dev.langchain4j: DEBUG
+    com.interviewcoach: INFO
+    dev.langchain4j: WARN
 
 # Actuator & Metrics
 management:

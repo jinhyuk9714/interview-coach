@@ -1,0 +1,8 @@
+logging:
+  level:
+    com.interviewcoach: DEBUG
+    dev.langchain4j: DEBUG
+
+spring:
+  jpa:
+    show-sql: true

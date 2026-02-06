@@ -66,6 +66,24 @@ public class RouteConfig {
                         .filters(f -> f.filter(jwtAuthenticationFilter.apply(new JwtAuthenticationFilter.Config())))
                         .uri(feedbackServiceUrl))
 
+                // Swagger UI & API Docs routes (per service)
+                .route("user-service-docs", r -> r
+                        .path("/user-service/swagger-ui/**", "/user-service/api-docs/**", "/user-service/v3/api-docs/**")
+                        .filters(f -> f.rewritePath("/user-service/(?<segment>.*)", "/${segment}"))
+                        .uri(userServiceUrl))
+                .route("question-service-docs", r -> r
+                        .path("/question-service/swagger-ui/**", "/question-service/api-docs/**", "/question-service/v3/api-docs/**")
+                        .filters(f -> f.rewritePath("/question-service/(?<segment>.*)", "/${segment}"))
+                        .uri(questionServiceUrl))
+                .route("interview-service-docs", r -> r
+                        .path("/interview-service/swagger-ui/**", "/interview-service/api-docs/**", "/interview-service/v3/api-docs/**")
+                        .filters(f -> f.rewritePath("/interview-service/(?<segment>.*)", "/${segment}"))
+                        .uri(interviewServiceUrl))
+                .route("feedback-service-docs", r -> r
+                        .path("/feedback-service/swagger-ui/**", "/feedback-service/api-docs/**", "/feedback-service/v3/api-docs/**")
+                        .filters(f -> f.rewritePath("/feedback-service/(?<segment>.*)", "/${segment}"))
+                        .uri(feedbackServiceUrl))
+
                 .build();
     }
 }
