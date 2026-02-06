@@ -813,21 +813,27 @@ export default function InterviewPage() {
                 <Pause className="w-4 h-4" />
               </button>
               <span className="text-sm font-mono text-neutral-500">
-                질문 {currentQuestionIndex + 1} / {session?.totalQuestions}
+                질문 {returnToQuestionIndex !== null ? returnToQuestionIndex : Math.min(currentQuestionIndex + 1, originalTotalQuestions)} / {originalTotalQuestions || session?.totalQuestions}
+                {returnToQuestionIndex !== null && (
+                  <span className="text-accent-blue ml-1">(꼬리 질문)</span>
+                )}
               </span>
               <div className="flex gap-1">
-                {Array.from({ length: session?.totalQuestions || 5 }).map((_, i) => (
+                {Array.from({ length: originalTotalQuestions || session?.totalQuestions || 5 }).map((_, i) => {
+                  const displayIndex = returnToQuestionIndex !== null ? returnToQuestionIndex - 1 : currentQuestionIndex;
+                  return (
                   <div
                     key={i}
                     className={`w-8 h-1.5 ${
-                      i < currentQuestionIndex
+                      i < displayIndex
                         ? 'bg-accent-lime'
-                        : i === currentQuestionIndex
-                        ? 'bg-accent-coral'
+                        : i === displayIndex
+                        ? returnToQuestionIndex !== null ? 'bg-accent-blue' : 'bg-accent-coral'
                         : 'bg-neutral-200'
                     }`}
                   />
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -1075,7 +1081,9 @@ export default function InterviewPage() {
                       onClick={handleNext}
                       rightIcon={<ChevronRight className="w-4 h-4" />}
                     >
-                      {currentQuestionIndex < (session?.totalQuestions || 0) - 1
+                      {returnToQuestionIndex !== null
+                        ? '다음 질문으로'
+                        : currentQuestionIndex < originalTotalQuestions - 1
                         ? '다음 질문'
                         : '면접 완료'}
                     </Button>
