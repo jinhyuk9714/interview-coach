@@ -112,7 +112,7 @@ class InterviewServiceTest {
                     createSessionWithQnas(2L, USER_ID, JD_ID, "behavioral", "in_progress", 3)
             );
 
-            given(sessionRepository.findByUserIdOrderByStartedAtDesc(USER_ID)).willReturn(sessions);
+            given(sessionRepository.findByUserIdWithQnaOrderByStartedAtDesc(USER_ID)).willReturn(sessions);
 
             // when
             InterviewListResponse response = interviewService.getInterviews(USER_ID);
@@ -127,7 +127,7 @@ class InterviewServiceTest {
         @DisplayName("면접 이력이 없는 경우 빈 목록 반환")
         void getInterviews_Empty() {
             // given
-            given(sessionRepository.findByUserIdOrderByStartedAtDesc(USER_ID)).willReturn(List.of());
+            given(sessionRepository.findByUserIdWithQnaOrderByStartedAtDesc(USER_ID)).willReturn(List.of());
 
             // when
             InterviewListResponse response = interviewService.getInterviews(USER_ID);
@@ -147,7 +147,7 @@ class InterviewServiceTest {
         void getInterview_Success() throws Exception {
             // given
             InterviewSession session = createSessionWithQnas(SESSION_ID, USER_ID, JD_ID, "technical", "in_progress", 3);
-            given(sessionRepository.findById(SESSION_ID)).willReturn(Optional.of(session));
+            given(sessionRepository.findByIdWithQna(SESSION_ID)).willReturn(Optional.of(session));
 
             // when
             InterviewSessionResponse response = interviewService.getInterview(SESSION_ID);
@@ -161,7 +161,7 @@ class InterviewServiceTest {
         @DisplayName("존재하지 않는 세션 조회 시 예외 발생")
         void getInterview_NotFound() {
             // given
-            given(sessionRepository.findById(SESSION_ID)).willReturn(Optional.empty());
+            given(sessionRepository.findByIdWithQna(SESSION_ID)).willReturn(Optional.empty());
 
             // when & then
             assertThatThrownBy(() -> interviewService.getInterview(SESSION_ID))
@@ -287,7 +287,7 @@ class InterviewServiceTest {
                     createSessionWithStatus(2L, USER_ID, "in_progress", null),
                     createSessionWithStatus(3L, USER_ID, "completed", 72)
             );
-            given(sessionRepository.findByUserIdOrderByStartedAtDesc(USER_ID)).willReturn(sessions);
+            given(sessionRepository.findByUserIdWithQnaOrderByStartedAtDesc(USER_ID)).willReturn(sessions);
 
             // when
             InterviewListResponse response = interviewService.getInterviews(USER_ID);
@@ -312,7 +312,7 @@ class InterviewServiceTest {
 
             // Repository는 이미 정렬된 결과를 반환한다고 가정
             List<InterviewSession> sessions = List.of(session3, session2, session1);
-            given(sessionRepository.findByUserIdOrderByStartedAtDesc(USER_ID)).willReturn(sessions);
+            given(sessionRepository.findByUserIdWithQnaOrderByStartedAtDesc(USER_ID)).willReturn(sessions);
 
             // when
             InterviewListResponse response = interviewService.getInterviews(USER_ID);
@@ -329,7 +329,7 @@ class InterviewServiceTest {
         void getInterview_IncludesQnaList() throws Exception {
             // given
             InterviewSession session = createSessionWithQnasAndFeedback(SESSION_ID, USER_ID, JD_ID, "technical", "completed");
-            given(sessionRepository.findById(SESSION_ID)).willReturn(Optional.of(session));
+            given(sessionRepository.findByIdWithQna(SESSION_ID)).willReturn(Optional.of(session));
 
             // when
             InterviewSessionResponse response = interviewService.getInterview(SESSION_ID);

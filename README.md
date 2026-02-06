@@ -499,9 +499,15 @@ erDiagram
   - [x] 면접 검색, 일시정지/재개, 타이머, 모범답안 기능
   - [x] k6 시나리오 3종 (검색, 동시성, Soak Test)
   - [x] Prometheus 메트릭 (JVM, Hibernate, HikariCP)
-- [ ] **Phase 6: 배포**
-  - [ ] Kubernetes 배포
-  - [ ] CI/CD 파이프라인 완성
+- [x] **Phase 6: 배포**
+  - [x] CI 파이프라인 (GitHub Actions: 백엔드 빌드/테스트 + 프론트엔드 린트/빌드)
+  - [x] CD 파이프라인 (ghcr.io 이미지 빌드/푸시 + Kustomize 배포)
+  - [x] Kubernetes 매니페스트 (Kustomize base + dev/prod overlays)
+  - [x] User-Service 테스트 (JWT, 인증 서비스, 컨트롤러)
+  - [x] Gateway 테스트 (JWT 필터, 라우트, CORS)
+  - [x] HPA 자동 스케일링 (gateway, question-service, feedback-service)
+  - [x] Network Policy (zero-trust: gateway만 백엔드 접근)
+  - [x] minikube 로컬 배포 스크립트
 
 ## 기술적 도전
 

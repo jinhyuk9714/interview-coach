@@ -3,8 +3,11 @@ package com.interviewcoach.feedback.application.service;
 import com.interviewcoach.feedback.application.dto.request.RecordAnswerRequest;
 import com.interviewcoach.feedback.application.dto.response.StatisticsResponse;
 import com.interviewcoach.feedback.application.dto.response.UserStatisticsSummaryResponse;
+import com.interviewcoach.feedback.domain.entity.DailyActivity;
 import com.interviewcoach.feedback.domain.entity.UserStatistics;
+import com.interviewcoach.feedback.domain.repository.DailyActivityRepository;
 import com.interviewcoach.feedback.domain.repository.UserStatisticsRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -15,11 +18,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
 
@@ -30,6 +35,9 @@ class StatisticsServiceTest {
     @Mock
     private UserStatisticsRepository statisticsRepository;
 
+    @Mock
+    private DailyActivityRepository dailyActivityRepository;
+
     @InjectMocks
     private StatisticsService statisticsService;
 
@@ -38,6 +46,16 @@ class StatisticsServiceTest {
     @Nested
     @DisplayName("recordAnswer 메서드")
     class RecordAnswerTest {
+
+        @BeforeEach
+        void setUpDailyActivity() {
+            DailyActivity dailyActivity = DailyActivity.builder()
+                    .userId(USER_ID)
+                    .activityDate(LocalDate.now())
+                    .build();
+            given(dailyActivityRepository.findByUserIdAndActivityDateWithLock(eq(USER_ID), any(LocalDate.class)))
+                    .willReturn(Optional.of(dailyActivity));
+        }
 
         @Test
         @DisplayName("새로운 카테고리의 첫 답변 기록")
@@ -52,7 +70,7 @@ class StatisticsServiceTest {
 
             UserStatistics savedStats = createUserStatistics(1L, USER_ID, "Java", 1, 1, BigDecimal.valueOf(100.00));
 
-            given(statisticsRepository.findByUserIdAndSkillCategory(USER_ID, "Java"))
+            given(statisticsRepository.findByUserIdAndSkillCategoryWithLock(USER_ID, "Java"))
                     .willReturn(Optional.empty());
             given(statisticsRepository.save(any(UserStatistics.class))).willReturn(newStats);
 
@@ -75,7 +93,7 @@ class StatisticsServiceTest {
             UserStatistics existingStats = createUserStatisticsWithTotalScore(
                     1L, USER_ID, "Spring", 5, 3, 300, BigDecimal.valueOf(60.00));
 
-            given(statisticsRepository.findByUserIdAndSkillCategory(USER_ID, "Spring"))
+            given(statisticsRepository.findByUserIdAndSkillCategoryWithLock(USER_ID, "Spring"))
                     .willReturn(Optional.of(existingStats));
 
             // when - 정답(score 없음 -> 100점으로 처리)
@@ -99,7 +117,7 @@ class StatisticsServiceTest {
             UserStatistics existingStats = createUserStatisticsWithTotalScore(
                     1L, USER_ID, "Database", 4, 4, 400, BigDecimal.valueOf(100.00));
 
-            given(statisticsRepository.findByUserIdAndSkillCategory(USER_ID, "Database"))
+            given(statisticsRepository.findByUserIdAndSkillCategoryWithLock(USER_ID, "Database"))
                     .willReturn(Optional.of(existingStats));
 
             // when - 오답(score 없음 -> 0점으로 처리)
@@ -122,7 +140,7 @@ class StatisticsServiceTest {
             UserStatistics existingStats = createUserStatisticsWithTotalScore(
                     1L, USER_ID, "Algorithm", 3, 2, 200, BigDecimal.valueOf(66.67));
 
-            given(statisticsRepository.findByUserIdAndSkillCategory(USER_ID, "Algorithm"))
+            given(statisticsRepository.findByUserIdAndSkillCategoryWithLock(USER_ID, "Algorithm"))
                     .willReturn(Optional.of(existingStats));
 
             // when
@@ -141,7 +159,7 @@ class StatisticsServiceTest {
             UserStatistics existingStats = createUserStatisticsWithTotalScore(
                     1L, USER_ID, "Java", 4, 3, 300, BigDecimal.valueOf(75.00));
 
-            given(statisticsRepository.findByUserIdAndSkillCategory(USER_ID, "Java"))
+            given(statisticsRepository.findByUserIdAndSkillCategoryWithLock(USER_ID, "Java"))
                     .willReturn(Optional.of(existingStats));
 
             // when
@@ -163,7 +181,7 @@ class StatisticsServiceTest {
             UserStatistics existingStats = createUserStatisticsWithTotalScore(
                     1L, USER_ID, "Spring", 2, 2, 200, BigDecimal.valueOf(100.00));
 
-            given(statisticsRepository.findByUserIdAndSkillCategory(USER_ID, "Spring"))
+            given(statisticsRepository.findByUserIdAndSkillCategoryWithLock(USER_ID, "Spring"))
                     .willReturn(Optional.of(existingStats));
 
             // when
@@ -185,7 +203,7 @@ class StatisticsServiceTest {
             UserStatistics existingStats = createUserStatisticsWithTotalScore(
                     1L, USER_ID, "Database", 2, 2, 200, BigDecimal.valueOf(100.00));
 
-            given(statisticsRepository.findByUserIdAndSkillCategory(USER_ID, "Database"))
+            given(statisticsRepository.findByUserIdAndSkillCategoryWithLock(USER_ID, "Database"))
                     .willReturn(Optional.of(existingStats));
 
             // when
@@ -205,7 +223,7 @@ class StatisticsServiceTest {
             UserStatistics existingStats = createUserStatisticsWithTotalScore(
                     1L, USER_ID, "Java", 3, 2, 210, BigDecimal.valueOf(70.00));
 
-            given(statisticsRepository.findByUserIdAndSkillCategory(USER_ID, "Java"))
+            given(statisticsRepository.findByUserIdAndSkillCategoryWithLock(USER_ID, "Java"))
                     .willReturn(Optional.of(existingStats));
 
             // when - 85점 추가

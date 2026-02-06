@@ -1,0 +1,41 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: interview-coach
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml
+  - ingress.yaml
+  - network-policy.yaml
+
+  # Infrastructure
+  - postgres/statefulset.yaml
+  - postgres/service.yaml
+  - postgres/init-configmap.yaml
+  - redis/deployment.yaml
+  - redis/service.yaml
+  - redis/pvc.yaml
+  - chromadb/deployment.yaml
+  - chromadb/service.yaml
+  - chromadb/pvc.yaml
+
+  # Backend services
+  - gateway/deployment.yaml
+  - gateway/service.yaml
+  - user-service/deployment.yaml
+  - user-service/service.yaml
+  - question-service/deployment.yaml
+  - question-service/service.yaml
+  - interview-service/deployment.yaml
+  - interview-service/service.yaml
+  - feedback-service/deployment.yaml
+  - feedback-service/service.yaml
+
+  # Frontend
+  - frontend/deployment.yaml
+  - frontend/service.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: interview-coach

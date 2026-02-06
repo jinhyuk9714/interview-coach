@@ -1,0 +1,132 @@
+name: CD Deploy
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'performance/**'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/interview-coach
+
+jobs:
+  build-and-push-backend:
+    name: Build ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        service:
+          - gateway
+          - user-service
+          - question-service
+          - interview-service
+          - feedback-service
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          target: ${{ matrix.service }}
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:${{ github.sha }}
+            ${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:latest
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  build-and-push-frontend:
+    name: Build frontend
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend/web
+          file: ./frontend/web/Dockerfile
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_URL=http://gateway:8080
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/frontend:${{ github.sha }}
+            ${{ env.IMAGE_PREFIX }}/frontend:latest
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    needs: [build-and-push-backend, build-and-push-frontend]
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Kustomize
+        uses: imranismail/setup-kustomize@v2
+
+      - name: Update image tags
+        working-directory: infra/k8s/overlays/prod
+        run: |
+          kustomize edit set image \
+            ghcr.io/interview-coach/gateway=${{ env.IMAGE_PREFIX }}/gateway:${{ github.sha }} \
+            ghcr.io/interview-coach/user-service=${{ env.IMAGE_PREFIX }}/user-service:${{ github.sha }} \
+            ghcr.io/interview-coach/question-service=${{ env.IMAGE_PREFIX }}/question-service:${{ github.sha }} \
+            ghcr.io/interview-coach/interview-service=${{ env.IMAGE_PREFIX }}/interview-service:${{ github.sha }} \
+            ghcr.io/interview-coach/feedback-service=${{ env.IMAGE_PREFIX }}/feedback-service:${{ github.sha }} \
+            ghcr.io/interview-coach/frontend=${{ env.IMAGE_PREFIX }}/frontend:${{ github.sha }}
+
+      - name: Verify Kustomize build
+        run: kustomize build infra/k8s/overlays/prod > /dev/null
+
+      - name: Deploy to cluster
+        if: ${{ vars.KUBE_CONFIG != '' }}
+        env:
+          KUBE_CONFIG: ${{ vars.KUBE_CONFIG }}
+        run: |
+          mkdir -p ~/.kube
+          echo "$KUBE_CONFIG" | base64 -d > ~/.kube/config
+          kubectl apply -k infra/k8s/overlays/prod
+          kubectl -n interview-coach rollout status deployment/gateway --timeout=300s
+          kubectl -n interview-coach rollout status deployment/user-service --timeout=300s
+          kubectl -n interview-coach rollout status deployment/question-service --timeout=300s
+          kubectl -n interview-coach rollout status deployment/interview-service --timeout=300s
+          kubectl -n interview-coach rollout status deployment/feedback-service --timeout=300s
+          kubectl -n interview-coach rollout status deployment/frontend --timeout=300s

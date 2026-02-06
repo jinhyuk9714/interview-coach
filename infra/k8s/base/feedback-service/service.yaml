@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: feedback-service
+  namespace: interview-coach
+  labels:
+    app: feedback-service
+spec:
+  selector:
+    app: feedback-service
+  ports:
+    - port: 8084
+      targetPort: 8084
+      protocol: TCP
+  type: ClusterIP
