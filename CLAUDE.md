@@ -404,8 +404,51 @@ k6 run performance/k6/scenarios/soak-test.js               # 장시간 메모리
 - Prometheus: http://localhost:9090
 - InfluxDB: http://localhost:8086
 
+## Kubernetes 배포
+
+### 구조
+```
+infra/k8s/
+├── base/           # 공통 매니페스트 (Deployment, Service, ConfigMap, Secret, Ingress)
+├── overlays/
+│   ├── dev/        # 리소스 축소, replicas=1
+│   └── prod/       # HPA, replicas=2+, 리소스 확장
+└── scripts/
+    └── deploy-local.sh  # minikube 자동 배포
+```
+
+### 배포 명령어
+
+```bash
+# 로컬 (minikube)
+./infra/k8s/scripts/deploy-local.sh
+
+# Dev 환경
+kubectl apply -k infra/k8s/overlays/dev
+
+# Prod 환경
+kubectl apply -k infra/k8s/overlays/prod
+
+# 상태 확인
+kubectl get pods -n interview-coach
+```
+
+### CI/CD 파이프라인
+
+| 워크플로우 | 트리거 | 동작 |
+|-----------|--------|------|
+| `ci.yml` | PR, push to main | 백엔드 빌드/테스트 + 프론트엔드 린트/빌드 |
+| `deploy.yml` | push to main | ghcr.io 이미지 빌드/푸시 + K8s 배포 |
+
+### HPA (prod)
+- gateway, question-service, feedback-service: CPU 70% → 2~5 replicas
+
+### Network Policy
+- gateway만 백엔드 서비스 접근 가능 (zero-trust)
+
 ## 관련 문서
 
+- [K8s 배포 가이드](infra/k8s/README.md)
 - [성능 테스트 가이드](docs/performance/README.md)
 - [기준선 정의](docs/performance/BASELINE.md)
 - [분석 가이드](docs/performance/ANALYSIS.md)

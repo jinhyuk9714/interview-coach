@@ -3,17 +3,18 @@ package com.interviewcoach.feedback.application.service;
 import com.interviewcoach.feedback.application.dto.response.FeedbackResponse;
 import com.interviewcoach.feedback.infrastructure.llm.FeedbackLlmClient;
 import com.interviewcoach.feedback.infrastructure.streaming.SseEmitterManager;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,8 +32,14 @@ class FeedbackServiceTest {
     @Mock
     private FeedbackLlmClient feedbackLlmClient;
 
-    @InjectMocks
     private FeedbackService feedbackService;
+
+    @BeforeEach
+    void setUp() {
+        // Use direct executor so async tasks run synchronously in tests
+        Executor directExecutor = Runnable::run;
+        feedbackService = new FeedbackService(sseEmitterManager, feedbackLlmClient, directExecutor);
+    }
 
     private static final Long SESSION_ID = 1L;
     private static final Long QNA_ID = 10L;
@@ -53,7 +60,7 @@ class FeedbackServiceTest {
             given(sseEmitterManager.createEmitter(expectedKey)).willReturn(mockEmitter);
 
             // when
-            SseEmitter result = feedbackService.streamFeedback(SESSION_ID, QNA_ID, questionText, answerText);
+            SseEmitter result = feedbackService.streamFeedback(SESSION_ID, QNA_ID, questionText, answerText, 0);
 
             // then
             assertThat(result).isEqualTo(mockEmitter);
@@ -80,7 +87,7 @@ class FeedbackServiceTest {
                     .build();
 
             given(sseEmitterManager.createEmitter(expectedKey)).willReturn(mockEmitter);
-            given(feedbackLlmClient.generateFeedback(SESSION_ID, QNA_ID, questionText, answerText))
+            given(feedbackLlmClient.generateFeedbackWithFollowUp(SESSION_ID, QNA_ID, questionText, answerText, 0))
                     .willReturn(mockFeedback);
 
             CountDownLatch latch = new CountDownLatch(1);
@@ -90,13 +97,13 @@ class FeedbackServiceTest {
             }).when(sseEmitterManager).complete(expectedKey);
 
             // when
-            feedbackService.streamFeedback(SESSION_ID, QNA_ID, questionText, answerText);
+            feedbackService.streamFeedback(SESSION_ID, QNA_ID, questionText, answerText, 0);
 
             // then - 비동기 작업 완료 대기
             boolean completed = latch.await(5, TimeUnit.SECONDS);
             assertThat(completed).isTrue();
 
-            verify(feedbackLlmClient, times(1)).generateFeedback(SESSION_ID, QNA_ID, questionText, answerText);
+            verify(feedbackLlmClient, times(1)).generateFeedbackWithFollowUp(SESSION_ID, QNA_ID, questionText, answerText, 0);
             verify(sseEmitterManager, times(1)).sendFeedback(eq(expectedKey), eq(mockFeedback));
         }
 
@@ -118,7 +125,7 @@ class FeedbackServiceTest {
                     .build();
 
             given(sseEmitterManager.createEmitter(expectedKey)).willReturn(mockEmitter);
-            given(feedbackLlmClient.generateFeedback(SESSION_ID, QNA_ID, "", ""))
+            given(feedbackLlmClient.generateFeedbackWithFollowUp(SESSION_ID, QNA_ID, "", "", 0))
                     .willReturn(mockFeedback);
 
             CountDownLatch latch = new CountDownLatch(1);
@@ -128,13 +135,13 @@ class FeedbackServiceTest {
             }).when(sseEmitterManager).complete(expectedKey);
 
             // when
-            feedbackService.streamFeedback(SESSION_ID, QNA_ID, questionText, answerText);
+            feedbackService.streamFeedback(SESSION_ID, QNA_ID, questionText, answerText, 0);
 
             // then
             boolean completed = latch.await(5, TimeUnit.SECONDS);
             assertThat(completed).isTrue();
 
-            verify(feedbackLlmClient).generateFeedback(SESSION_ID, QNA_ID, "", "");
+            verify(feedbackLlmClient).generateFeedbackWithFollowUp(SESSION_ID, QNA_ID, "", "", 0);
         }
 
         @Test
@@ -151,7 +158,7 @@ class FeedbackServiceTest {
                     .build();
 
             given(sseEmitterManager.createEmitter(expectedKey)).willReturn(mockEmitter);
-            given(feedbackLlmClient.generateFeedback(SESSION_ID, QNA_ID, "", ""))
+            given(feedbackLlmClient.generateFeedbackWithFollowUp(SESSION_ID, QNA_ID, "", "", 0))
                     .willReturn(mockFeedback);
 
             CountDownLatch latch = new CountDownLatch(1);
@@ -161,13 +168,13 @@ class FeedbackServiceTest {
             }).when(sseEmitterManager).complete(expectedKey);
 
             // when
-            feedbackService.streamFeedback(SESSION_ID, QNA_ID, null, null);
+            feedbackService.streamFeedback(SESSION_ID, QNA_ID, null, null, 0);
 
             // then
             boolean completed = latch.await(5, TimeUnit.SECONDS);
             assertThat(completed).isTrue();
 
-            verify(feedbackLlmClient).generateFeedback(SESSION_ID, QNA_ID, "", "");
+            verify(feedbackLlmClient).generateFeedbackWithFollowUp(SESSION_ID, QNA_ID, "", "", 0);
         }
     }
 }

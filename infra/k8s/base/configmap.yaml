@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: interview-coach-config
+  namespace: interview-coach
+data:
+  # Database
+  DATABASE_URL: "jdbc:postgresql://postgres:5432/interview_coach"
+  DATABASE_USERNAME: "postgres"
+
+  # Redis
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+
+  # ChromaDB
+  CHROMA_HOST: "chromadb"
+  CHROMA_PORT: "8000"
+
+  # Service URLs (K8s internal DNS)
+  USER_SERVICE_URL: "http://user-service:8081"
+  QUESTION_SERVICE_URL: "http://question-service:8082"
+  INTERVIEW_SERVICE_URL: "http://interview-service:8083"
+  FEEDBACK_SERVICE_URL: "http://feedback-service:8084"
+
+  # PostgreSQL
+  POSTGRES_DB: "interview_coach"
+  POSTGRES_USER: "postgres"

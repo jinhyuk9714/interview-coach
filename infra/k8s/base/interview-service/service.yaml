@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: interview-service
+  namespace: interview-coach
+  labels:
+    app: interview-service
+spec:
+  selector:
+    app: interview-service
+  ports:
+    - port: 8083
+      targetPort: 8083
+      protocol: TCP
+  type: ClusterIP

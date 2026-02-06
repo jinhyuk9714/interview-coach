@@ -1,0 +1,21 @@
+# Test Profile Configuration
+spring:
+  main:
+    web-application-type: reactive
+
+jwt:
+  secret: test-secret-key-must-be-at-least-256-bits-long-for-hmac-sha
+
+services:
+  user-service:
+    url: http://localhost:8081
+  question-service:
+    url: http://localhost:8082
+  interview-service:
+    url: http://localhost:8083
+  feedback-service:
+    url: http://localhost:8084
+
+logging:
+  level:
+    com.interviewcoach: DEBUG
