@@ -18,17 +18,35 @@
 
 ## 스크린샷
 
-| 대시보드 | JD 분석 |
-|:---:|:---:|
-| [![대시보드](docs/screenshots/대시보드.png)](docs/screenshots/대시보드.png) | [![JD 분석 결과](docs/screenshots/JD%20분석%20결과.png)](docs/screenshots/JD%20분석%20결과.png) |
+<details>
+<summary><b>대시보드</b> (클릭하여 확대)</summary>
+<img src="docs/screenshots/대시보드.png" alt="대시보드">
+</details>
 
-| 면접 진행 | AI 피드백 |
-|:---:|:---:|
-| [![면접 진행 중](docs/screenshots/면접%20진행%20중.png)](docs/screenshots/면접%20진행%20중.png) | [![피드백 화면](docs/screenshots/피드백%20화면.png)](docs/screenshots/피드백%20화면.png) |
+<details>
+<summary><b>JD 분석</b> (클릭하여 확대)</summary>
+<img src="docs/screenshots/JD 분석 결과.png" alt="JD 분석 결과">
+</details>
 
-| 면접 결과 리포트 | 학습 통계 |
-|:---:|:---:|
-| [![면접 결과 리포트](docs/screenshots/면접%20결과%20리포트.png)](docs/screenshots/면접%20결과%20리포트.png) | [![통계 페이지](docs/screenshots/통계%20페이지.png)](docs/screenshots/통계%20페이지.png) |
+<details>
+<summary><b>면접 진행</b> (클릭하여 확대)</summary>
+<img src="docs/screenshots/면접 진행 중.png" alt="면접 진행 중">
+</details>
+
+<details>
+<summary><b>AI 피드백</b> (클릭하여 확대)</summary>
+<img src="docs/screenshots/피드백 화면.png" alt="피드백 화면">
+</details>
+
+<details>
+<summary><b>면접 결과 리포트</b> (클릭하여 확대)</summary>
+<img src="docs/screenshots/면접 결과 리포트.png" alt="면접 결과 리포트">
+</details>
+
+<details>
+<summary><b>학습 통계</b> (클릭하여 확대)</summary>
+<img src="docs/screenshots/통계 페이지.png" alt="통계 페이지">
+</details>
 
 ## 아키텍처
 
