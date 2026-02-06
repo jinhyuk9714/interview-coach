@@ -102,6 +102,9 @@ export const interviewApi = {
 
   list: () => api.get('/api/v1/interviews'),
 
+  // [A-1] 면접 기록 검색
+  search: (keyword: string) => api.get(`/api/v1/interviews/search`, { params: { keyword } }),
+
   get: (id: number) => api.get(`/api/v1/interviews/${id}`),
 
   submitAnswer: (id: number, data: { questionOrder: number; answerText: string }) =>
@@ -111,6 +114,10 @@ export const interviewApi = {
     api.put(`/api/v1/interviews/${id}/qna/${questionOrder}/feedback`, feedback),
 
   complete: (id: number) => api.post(`/api/v1/interviews/${id}/complete`),
+
+  // [A-2] 면접 일시정지/재개
+  pause: (id: number) => api.patch(`/api/v1/interviews/${id}/pause`),
+  resume: (id: number) => api.patch(`/api/v1/interviews/${id}/resume`),
 
   addFollowUp: (id: number, data: { parentQnaId: number; questionText: string; followUpDepth: number; focusArea?: string }) =>
     api.post(`/api/v1/interviews/${id}/follow-up`, data),

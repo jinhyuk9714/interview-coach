@@ -1,36 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Interview Coach - Frontend
 
-## Getting Started
+AI 면접 코치 프론트엔드 애플리케이션
 
-First, run the development server:
+## 기술 스택
+
+- **Next.js 14** (App Router)
+- **TypeScript 5.x**
+- **Tailwind CSS** (Neo-brutalist 디자인)
+- **Zustand** (클라이언트 상태 관리)
+- **@tanstack/react-query** (서버 상태 캐싱)
+- **Axios** (HTTP 클라이언트, 토큰 자동 갱신)
+
+## 시작하기
 
 ```bash
+# 의존성 설치
+npm install
+
+# 개발 서버 실행
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+
+# 프로덕션 빌드
+npm run build
+npm start
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+http://localhost:3000 접속
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 환경 변수
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+# .env.local
+NEXT_PUBLIC_API_URL=http://localhost:8080
+```
 
-## Learn More
+## 페이지 구조
 
-To learn more about Next.js, take a look at the following resources:
+| 경로 | 설명 |
+|------|------|
+| `/login` | 로그인 |
+| `/signup` | 회원가입 |
+| `/dashboard` | 대시보드 (React Query 캐싱) |
+| `/jd` | JD 등록/관리, 질문 생성 |
+| `/interview` | 모의 면접 진행 (타이머, 모범답안, 일시정지) |
+| `/history` | 면접 기록 목록 (검색, 재개) |
+| `/statistics` | 학습 통계 |
+| `/profile` | 프로필 설정 |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 주요 기능
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **JD 기반 질문 생성**: JD 등록 → 스킬 분석 → AI 면접 질문 생성 (취약 분야 우선 반영)
+- **모의 면접**: 실시간 AI 피드백 (SSE 스트리밍), 꼬리 질문 자동 생성
+- **면접 타이머**: 질문당 3분/5분 카운트다운
+- **모범 답안**: 피드백 후 토글로 확인
+- **일시정지/재개**: 면접 중단 후 나중에 이어서 진행
+- **기록 검색**: 키워드로 면접 기록 검색 (디바운스 적용)
+- **React Query**: 대시보드 API 캐싱, 중복 요청 방지
 
-## Deploy on Vercel
+## 디자인 시스템
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Neo-brutalist 스타일:
+- 굵은 테두리 (`border-4 border-black`)
+- 그림자 효과 (`shadow-[4px_4px_0_0_black]`)
+- 원색 계열 색상

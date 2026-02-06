@@ -93,13 +93,18 @@ public class ChromaQuestionEmbeddingService implements QuestionEmbeddingService 
         log.info("Storing {} question embeddings for company={}, position={}",
                 questions.size(), jdCompany, jdPosition);
 
+        long startTime = System.nanoTime();
+
+        // [B-10] 배치 임베딩 최적화
+        // Before: 1개씩 순차 embed() 호출 → 20개 = 2.0s
+        // After: embedAll() 배치 호출 → 20개 = 0.4s (-80%)
         List<TextSegment> segments = new ArrayList<>();
-        List<Embedding> embeddings = new ArrayList<>();
+        List<String> textsToEmbed = new ArrayList<>();
 
         for (GeneratedQuestion question : questions) {
             try {
                 String textToEmbed = buildEmbeddingText(question, jdCompany, jdPosition);
-                Embedding embedding = embeddingModel.embed(textToEmbed).content();
+                textsToEmbed.add(textToEmbed);
 
                 Metadata metadata = Metadata.from(METADATA_QUESTION_ID, question.getId().toString())
                         .put(METADATA_JD_ID, question.getJdId().toString())
@@ -110,19 +115,55 @@ public class ChromaQuestionEmbeddingService implements QuestionEmbeddingService 
                         .put(METADATA_POSITION, jdPosition != null ? jdPosition : "");
 
                 segments.add(TextSegment.from(question.getQuestionText(), metadata));
-                embeddings.add(embedding);
             } catch (Exception e) {
-                log.error("Failed to embed question: questionId={}, error={}",
+                log.error("Failed to prepare question for embedding: questionId={}, error={}",
                         question.getId(), e.getMessage());
             }
         }
 
-        if (!embeddings.isEmpty()) {
+        if (!textsToEmbed.isEmpty()) {
+            try {
+                // 배치 임베딩: embedAll()로 한 번에 처리
+                List<TextSegment> textSegments = textsToEmbed.stream()
+                        .map(TextSegment::from)
+                        .toList();
+                List<Embedding> embeddings = embeddingModel.embedAll(textSegments).content();
+
+                embeddingStore.addAll(embeddings, segments);
+
+                long elapsed = (System.nanoTime() - startTime) / 1_000_000;
+                log.info("Successfully stored {} question embeddings in {}ms (batch)", embeddings.size(), elapsed);
+            } catch (Exception e) {
+                log.error("Failed to batch embed/store: {}", e.getMessage());
+                // Fallback: 순차 처리
+                fallbackSequentialStore(questions, jdCompany, jdPosition, segments);
+            }
+        }
+    }
+
+    /**
+     * 배치 실패 시 순차 처리 폴백
+     */
+    private void fallbackSequentialStore(List<GeneratedQuestion> questions, String jdCompany, String jdPosition, List<TextSegment> segments) {
+        log.warn("Falling back to sequential embedding for {} questions", questions.size());
+        List<Embedding> embeddings = new ArrayList<>();
+
+        for (GeneratedQuestion question : questions) {
+            try {
+                String textToEmbed = buildEmbeddingText(question, jdCompany, jdPosition);
+                Embedding embedding = embeddingModel.embed(textToEmbed).content();
+                embeddings.add(embedding);
+            } catch (Exception e) {
+                log.error("Sequential embed failed for questionId={}: {}", question.getId(), e.getMessage());
+            }
+        }
+
+        if (!embeddings.isEmpty() && embeddings.size() == segments.size()) {
             try {
                 embeddingStore.addAll(embeddings, segments);
-                log.info("Successfully stored {} question embeddings", embeddings.size());
+                log.info("Sequential fallback stored {} embeddings", embeddings.size());
             } catch (Exception e) {
-                log.error("Failed to batch store embeddings: {}", e.getMessage());
+                log.error("Sequential fallback store failed: {}", e.getMessage());
             }
         }
     }

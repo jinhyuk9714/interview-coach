@@ -24,6 +24,8 @@ AI 면접 코치 프로젝트의 성능/부하 테스트 실행 및 분석 가�
 # k6 설치 (macOS)
 brew install k6
 
+
+
 # k6 설치 (Ubuntu/Debian)
 sudo gpg -k
 sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg \

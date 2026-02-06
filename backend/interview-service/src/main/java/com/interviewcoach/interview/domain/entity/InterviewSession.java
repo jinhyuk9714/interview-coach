@@ -31,7 +31,7 @@ public class InterviewSession {
 
     @Column(length = 20)
     @Builder.Default
-    private String status = "in_progress"; // in_progress, completed, cancelled
+    private String status = "in_progress"; // in_progress, paused, completed, cancelled
 
     @Column(name = "total_questions")
     @Builder.Default
@@ -75,6 +75,22 @@ public class InterviewSession {
     }
 
     public boolean isInProgress() {
+        return "in_progress".equals(this.status);
+    }
+
+    public void pause() {
+        this.status = "paused";
+    }
+
+    public void resume() {
+        this.status = "in_progress";
+    }
+
+    public boolean isPaused() {
+        return "paused".equals(this.status);
+    }
+
+    public boolean canAnswer() {
         return "in_progress".equals(this.status);
     }
 }

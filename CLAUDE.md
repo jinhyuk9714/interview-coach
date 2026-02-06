@@ -31,8 +31,8 @@ interview-coach/
 - **Spring WebFlux**: 비동기 처리, SSE 스트리밍
 
 ### Database
-- **PostgreSQL**: 주 데이터베이스
-- **Redis**: 캐싱, 세션 관리
+- **PostgreSQL**: 주 데이터베이스 (복합 인덱스, `pg_stat_statements` 활성화)
+- **Redis**: 캐싱 (`@Cacheable` JD 목록/상세, TTL 5분), 세션 관리
 - **ChromaDB**: 벡터 DB (RAG)
 
 ### Frontend
@@ -40,11 +40,17 @@ interview-coach/
 - **TypeScript 5.x**
 - **Tailwind CSS 3.4.16**: Neo-brutalist 디자인
 - **Zustand 5.0.11**: 상태 관리
+- **@tanstack/react-query**: 서버 상태 캐싱, API 중복 호출 방지
 - **Axios 1.7.9**: HTTP 클라이언트
 
 ### LLM
 - **Claude API**: claude-sonnet-4-20250514 (Primary)
 - **OpenAI API**: Fallback
+
+### Observability
+- **Prometheus**: 메트릭 수집 (JVM, Hibernate, HikariCP)
+- **Grafana**: 대시보드 시각화
+- **k6**: 부하 테스트 (검색, 동시성, Soak Test)
 
 ## 명령어
 
@@ -96,9 +102,9 @@ cd frontend/web && npm run dev
 |--------|------|------|
 | gateway | 8080 | API Gateway, 라우팅, 인증 필터 |
 | user-service | 8081 | 회원가입/로그인, JWT 발급/검증 |
-| question-service | 8082 | JD 분석, 면접 질문 생성, RAG |
-| interview-service | 8083 | 모의 면접 세션, Q&A 관리 |
-| feedback-service | 8084 | AI 피드백 생성, 통계 분석 |
+| question-service | 8082 | JD 분석, 면접 질문 생성, RAG, Redis 캐싱 |
+| interview-service | 8083 | 모의 면접 세션, Q&A 관리, 검색, 일시정지/재개 |
+| feedback-service | 8084 | AI 피드백 생성, 통계 분석, SSE 스트리밍 |
 
 ## API 엔드포인트
 
@@ -114,8 +120,8 @@ cd frontend/web && npm run dev
 | Method | Endpoint | 설명 |
 |--------|----------|------|
 | POST | `/api/jd` | JD 등록 |
-| GET | `/api/jd` | JD 목록 조회 |
-| GET | `/api/jd/{id}` | JD 상세 조회 |
+| GET | `/api/jd` | JD 목록 조회 (Redis 캐싱) |
+| GET | `/api/jd/{id}` | JD 상세 조회 (Redis 캐싱) |
 | POST | `/api/jd/{id}/analyze` | JD 분석 (스킬 추출) |
 | DELETE | `/api/jd/{id}` | JD 삭제 |
 
@@ -131,23 +137,40 @@ cd frontend/web && npm run dev
 ### 면접 (interview-service)
 | Method | Endpoint | 설명 |
 |--------|----------|------|
-| POST | `/api/interviews/start` | 면접 세션 시작 |
+| POST | `/api/interviews` | 면접 세션 시작 |
 | POST | `/api/interviews/{id}/answer` | 답변 제출 |
 | POST | `/api/interviews/{id}/follow-up` | 꼬리 질문 추가 |
 | POST | `/api/interviews/{id}/complete` | 면접 완료 |
-| GET | `/api/interviews` | 면접 기록 목록 |
-| GET | `/api/interviews/{id}` | 면접 상세 조회 |
+| GET | `/api/interviews` | 면접 기록 목록 (Fetch Join) |
+| GET | `/api/interviews/{id}` | 면접 상세 조회 (Fetch Join) |
+| GET | `/api/interviews/search?keyword=xxx` | 면접 기록 검색 |
+| PATCH | `/api/interviews/{id}/pause` | 면접 일시정지 |
+| PATCH | `/api/interviews/{id}/resume` | 면접 재개 |
 
 ### 피드백 (feedback-service)
 | Method | Endpoint | 설명 |
 |--------|----------|------|
 | GET/POST | `/api/feedback/session/{id}/stream` | 피드백 + 꼬리 질문 조회 (SSE) |
-| GET | `/api/statistics/me` | 내 통계 조회 |
+| GET | `/api/statistics` | 내 통계 조회 |
+| POST | `/api/statistics/record` | 통계 기록 (비관적 락) |
 
 ### 꼬리 질문 (Follow-up Question)
 - **생성 조건**: 답변 점수 < 85점, 깊이 < 2
 - **피드백 응답에 포함**: `followUpQuestion`, `hasFollowUp` 필드
 - **동작 흐름**: 답변 → 피드백 + 꼬리 질문 생성 → 꼬리 질문 답변 → 원본 다음 질문으로 복귀
+
+### 면접 일시정지/재개
+- **상태**: `IN_PROGRESS` → `PAUSED` → `IN_PROGRESS`
+- **PAUSED 상태에서**: 답변 제출 불가, 재개 또는 완료만 가능
+- **History 페이지**: PAUSED 상태 표시, 재개 링크 제공
+
+### 면접 타이머
+- 질문당 제한 시간 설정 (3분/5분 선택)
+- 프론트엔드 전용: 카운트다운 UI + 시간 초과 경고
+
+### 모범 답안 표시
+- 피드백 후 "모범 답안 보기" 토글 버튼
+- 기존 `idealAnswer` 필드 활용
 
 ### 취약 분야 우선 반영
 - **취약 기준**: 70% 미만 점수 카테고리
@@ -179,10 +202,21 @@ interview_qna (id, session_id, question, answer, feedback JSONB, sequence, paren
 generated_questions (id, jd_id, question, category, difficulty)
 
 -- 사용자 통계
-user_statistics (id, user_id, total_interviews, avg_score, strengths, weaknesses)
+user_statistics (id, user_id, skill_category, total_questions, correct_answers, total_score)
 
 -- 일일 활동 기록
 daily_activity (id, user_id, activity_date, question_count, total_score, interview_count)
+```
+
+### 인덱스
+```sql
+CREATE INDEX idx_session_user_started ON interview_sessions(user_id, started_at DESC);
+CREATE INDEX idx_qna_session_order ON interview_qna(session_id, question_order);
+CREATE INDEX idx_stats_user_category ON user_statistics(user_id, skill_category);
+CREATE INDEX idx_daily_user_date ON daily_activity(user_id, activity_date DESC);
+CREATE INDEX idx_questions_jd_type ON generated_questions(jd_id, question_type);
+CREATE INDEX idx_qna_question_text ON interview_qna USING gin(to_tsvector('simple', question_text));
+CREATE INDEX idx_qna_answer_text ON interview_qna USING gin(to_tsvector('simple', answer_text));
 ```
 
 ## 환경 변수
@@ -243,10 +277,11 @@ service/
 ### RAG 파이프라인
 - **임베딩 모델**: AllMiniLmL6V2 (로컬, API 비용 없음)
 - **벡터 저장소**: ChromaDB
+- **배치 처리**: `embedAll()` API로 20개 질문 일괄 임베딩 (2.0s → 0.4s)
 - **동작 흐름**:
   1. 질문 생성 요청 시 ChromaDB에서 유사 질문 검색
   2. 유사 질문을 컨텍스트로 포함하여 LLM 호출 (중복 방지)
-  3. 생성된 질문을 ChromaDB에 임베딩 저장
+  3. 생성된 질문을 ChromaDB에 배치 임베딩 저장
 - **Graceful Degradation**: ChromaDB 연결 실패 시 기존 방식으로 동작
 
 ### 인증 흐름
@@ -258,6 +293,7 @@ service/
 - **Zustand stores**:
   - `authStore`: 인증 상태, 토큰 관리
   - `interviewStore`: 면접 세션 상태
+- **React Query**: 서버 데이터 캐싱 (`staleTime` 설정, 중복 요청 제거)
 - **Axios 인터셉터**: 자동 토큰 첨부, 401 처리
 
 ## 프론트엔드 구조
@@ -267,10 +303,10 @@ frontend/web/
 ├── src/
 │   ├── app/              # Next.js App Router 페이지
 │   │   ├── (auth)/       # 로그인/회원가입
-│   │   ├── dashboard/    # 대시보드
+│   │   ├── dashboard/    # 대시보드 (React Query)
 │   │   ├── jd/           # JD 관리
-│   │   ├── interview/    # 면접 진행
-│   │   ├── history/      # 면접 기록
+│   │   ├── interview/    # 면접 진행 (타이머, 모범답안, 일시정지)
+│   │   ├── history/      # 면접 기록 (검색, 재개)
 │   │   └── statistics/   # 통계
 │   ├── components/       # 재사용 컴포넌트
 │   ├── lib/              # API 클라이언트, 유틸리티
@@ -312,6 +348,36 @@ cd backend && ./gradlew :question-service:test
 - **GitHub Actions**: `.github/workflows/`
 - PR 시 자동 빌드 및 테스트
 
+## 성능 최적화
+
+### 적용된 최적화
+| 항목 | 기법 | 효과 |
+|------|------|------|
+| N+1 쿼리 | `LEFT JOIN FETCH` | 11 SQL → 1 SQL |
+| DB 인덱스 | 7개 복합/GIN 인덱스 | Full Scan → Index Scan |
+| Race Condition | `@Lock(PESSIMISTIC_WRITE)` | 데이터 정합성 100% |
+| Redis 캐싱 | `@Cacheable` (TTL 5분) | DB 쿼리 90% 감소 |
+| SSE 스레드 풀 | 전용 `ThreadPoolTaskExecutor` (core:50, max:100) | 타임아웃 50% → 0% |
+| SSE 메모리 누수 | TTL 기반 정리 + max 5,000 제한 | 힙 안정화 |
+| JVM/GC | ZGC + 서비스별 힙 사이징 | GC Pause 2s → 5ms |
+| HikariCP | 서비스별 풀 차등 할당 | Connection Wait 감소 |
+| 프론트엔드 | React Query 캐싱 | API 요청 70% 감소 |
+| 임베딩 | `embedAll()` 배치 처리 | 2.0s → 0.4s |
+
+### JVM 설정 (Dockerfile)
+- **user/interview/gateway**: `-Xms128m -Xmx256m -XX:+UseZGC`
+- **question/feedback**: `-Xms256m -Xmx512m -XX:+UseZGC`
+- GC 로그: `-Xlog:gc*:file=/tmp/gc.log`
+
+### HikariCP 풀 사이징
+| 서비스 | max-pool | min-idle |
+|--------|----------|----------|
+| user-service | 10 | 3 |
+| question-service | 15 | 5 |
+| interview-service | 15 | 5 |
+| feedback-service | 20 | 5 |
+| gateway | 10 | 3 |
+
 ## 성능 테스트
 
 ```bash
@@ -323,6 +389,11 @@ cd performance/monitoring && docker-compose -f docker-compose.monitoring.yml up 
 
 # Load Test (InfluxDB + Grafana)
 ./performance/scripts/run-load.sh -t load
+
+# k6 시나리오별 실행
+k6 run performance/k6/scenarios/search-load-test.js       # 검색 API 부하
+k6 run performance/k6/scenarios/concurrent-answer-test.js  # Race condition 검증
+k6 run performance/k6/scenarios/soak-test.js               # 장시간 메모리/GC 테스트
 
 # 결과 리포트 생성
 ./performance/scripts/generate-report.sh

@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useMemo } from 'react';
 import Link from 'next/link';
 import { motion } from 'motion/react';
+import { useQuery } from '@tanstack/react-query';
 import { Button, Card, CardContent, Tag, ScoreRing } from '@/components/ui';
 import { useAuthStore } from '@/stores/auth';
 import { interviewApi, statisticsApi, jdApi } from '@/lib/api';
@@ -30,117 +31,106 @@ interface Interview {
   startedAt: string;
 }
 
-interface Statistics {
-  totalInterviews: number;
-  avgScore: number;
-  totalJds: number;
-  weeklyInterviews: number;
-  weakPoints: Array<{ skill: string; score: number }>;
-  // API response fields
+interface ApiStatistics {
+  totalInterviews?: number;
+  avgScore?: number;
+  weakPoints?: Array<{ skill: string; score: number }>;
   weeklyActivity?: Array<{ day: string; count: number; score: number }>;
 }
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
-  const [recentInterviews, setRecentInterviews] = useState<Interview[]>([]);
-  const [statistics, setStatistics] = useState<Statistics>({
-    totalInterviews: 0,
-    avgScore: 0,
-    totalJds: 0,
-    weeklyInterviews: 0,
-    weakPoints: [],
+
+  // Fetch interviews
+  const {
+    data: interviewsData,
+    isLoading: isInterviewsLoading,
+    isError: isInterviewsError,
+  } = useQuery({
+    queryKey: ['interviews'],
+    queryFn: () => interviewApi.list(),
   });
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      setIsLoading(true);
-      setError(null);
+  // Fetch statistics
+  const {
+    data: statsData,
+    isLoading: isStatsLoading,
+    isError: isStatsError,
+  } = useQuery({
+    queryKey: ['statistics'],
+    queryFn: () => statisticsApi.get(),
+  });
 
-      try {
-        // Fetch all data in parallel
-        const [interviewsRes, statsRes, jdsRes] = await Promise.allSettled([
-          interviewApi.list(),
-          statisticsApi.get(),
-          jdApi.list(),
-        ]);
+  // Fetch JD list
+  const {
+    data: jdsData,
+    isLoading: isJdsLoading,
+    isError: isJdsError,
+  } = useQuery({
+    queryKey: ['jd-list'],
+    queryFn: () => jdApi.list(),
+  });
 
-        // Log API responses for debugging
-        console.log('Dashboard API responses:', {
-          interviews: interviewsRes,
-          stats: statsRes,
-          jds: jdsRes,
-        });
+  const isLoading = isInterviewsLoading || isStatsLoading || isJdsLoading;
+  const error = (isInterviewsError && isStatsError && isJdsError)
+    ? '데이터를 불러오는데 실패했습니다.'
+    : null;
 
-        // Process interviews
-        let interviews: Interview[] = [];
-        if (interviewsRes.status === 'fulfilled') {
-          const interviewData = interviewsRes.value.data;
-          // API returns {totalCount, interviews: []} format
-          interviews = Array.isArray(interviewData)
-            ? interviewData
-            : (interviewData?.interviews || []);
-          setRecentInterviews(interviews.slice(0, 3));
-        } else {
-          console.error('Failed to fetch interviews:', interviewsRes.reason);
-        }
+  // Derive interviews from query data
+  const interviews = useMemo<Interview[]>(() => {
+    if (!interviewsData?.data) return [];
+    const interviewData = interviewsData.data;
+    // API returns {totalCount, interviews: []} format
+    return Array.isArray(interviewData)
+      ? interviewData
+      : (interviewData?.interviews || []);
+  }, [interviewsData]);
 
-        // Get JD count
-        const totalJds = jdsRes.status === 'fulfilled' ? (jdsRes.value.data?.length || 0) : 0;
+  const recentInterviews = useMemo(() => interviews.slice(0, 3), [interviews]);
 
-        // Process statistics
-        if (statsRes.status === 'fulfilled' && statsRes.value.data) {
-          const apiStats = statsRes.value.data;
+  // Derive JD count
+  const totalJds = useMemo(() => jdsData?.data?.length || 0, [jdsData]);
 
-          // Calculate weeklyInterviews from weeklyActivity if available
-          const weeklyInterviews = apiStats.weeklyActivity
-            ? apiStats.weeklyActivity.reduce((sum: number, day: { count: number }) => sum + day.count, 0)
-            : interviews.filter((i: Interview) => {
-                const weekAgo = new Date();
-                weekAgo.setDate(weekAgo.getDate() - 7);
-                return parseUTCDate(i.startedAt) > weekAgo;
-              }).length;
+  // Derive statistics from query data
+  const statistics = useMemo(() => {
+    const apiStats: ApiStatistics | undefined = statsData?.data;
 
-          setStatistics({
-            totalInterviews: apiStats.totalInterviews ?? interviews.length,
-            avgScore: apiStats.avgScore ?? 0,
-            totalJds,
-            weeklyInterviews,
-            weakPoints: apiStats.weakPoints || [],
-          });
-        } else {
-          // Fallback: calculate statistics from interviews
-          const completedInterviews = interviews.filter(i => i.status === 'completed');
-          const avgScore = completedInterviews.length > 0
-            ? Math.round(completedInterviews.reduce((acc, i) => acc + (i.avgScore || i.score || 0), 0) / completedInterviews.length)
-            : 0;
+    if (apiStats) {
+      // Calculate weeklyInterviews from weeklyActivity if available
+      const weeklyInterviews = apiStats.weeklyActivity
+        ? apiStats.weeklyActivity.reduce((sum: number, day: { count: number }) => sum + day.count, 0)
+        : interviews.filter((i: Interview) => {
+            const weekAgo = new Date();
+            weekAgo.setDate(weekAgo.getDate() - 7);
+            return parseUTCDate(i.startedAt) > weekAgo;
+          }).length;
 
-          const weekAgo = new Date();
-          weekAgo.setDate(weekAgo.getDate() - 7);
+      return {
+        totalInterviews: apiStats.totalInterviews ?? interviews.length,
+        avgScore: apiStats.avgScore ?? 0,
+        totalJds,
+        weeklyInterviews,
+        weakPoints: apiStats.weakPoints || [],
+      };
+    }
 
-          setStatistics({
-            totalInterviews: interviews.length,
-            avgScore,
-            totalJds,
-            weeklyInterviews: interviews.filter(i => parseUTCDate(i.startedAt) > weekAgo).length,
-            weakPoints: [],
-          });
+    // Fallback: calculate statistics from interviews
+    const completedInterviews = interviews.filter(i => i.status === 'completed');
+    const avgScore = completedInterviews.length > 0
+      ? Math.round(completedInterviews.reduce((acc, i) => acc + (i.avgScore || i.score || 0), 0) / completedInterviews.length)
+      : 0;
 
-          if (statsRes.status === 'rejected') {
-            console.error('Failed to fetch statistics:', statsRes.reason);
-          }
-        }
-      } catch (err) {
-        console.error('Failed to fetch dashboard data:', err);
-        setError('데이터를 불러오는데 실패했습니다.');
-      } finally {
-        setIsLoading(false);
-      }
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+
+    return {
+      totalInterviews: interviews.length,
+      avgScore,
+      totalJds,
+      weeklyInterviews: interviews.filter(i => parseUTCDate(i.startedAt) > weekAgo).length,
+      weakPoints: [] as Array<{ skill: string; score: number }>,
     };
-
-    fetchDashboardData();
-  }, []);
+  }, [statsData, interviews, totalJds]);
 
   const quickStats = [
     { label: '총 면접 수', value: statistics.totalInterviews.toString(), icon: MessageSquare, color: 'bg-accent-lime' },

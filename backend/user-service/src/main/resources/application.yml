@@ -10,12 +10,15 @@ spring:
     username: ${DATABASE_USERNAME:postgres}
     password: ${DATABASE_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
+    # [B-8] HikariCP 커넥션 풀 차등 할당
+    # user-service: 인증만 처리, 낮은 풀 사이즈
     hikari:
-      maximum-pool-size: ${HIKARI_MAX_POOL_SIZE:30}
-      minimum-idle: ${HIKARI_MIN_IDLE:10}
+      maximum-pool-size: ${HIKARI_MAX_POOL_SIZE:10}
+      minimum-idle: ${HIKARI_MIN_IDLE:3}
       connection-timeout: 20000
       max-lifetime: 1800000
       idle-timeout: 600000
+      pool-name: user-hikari
 
   jpa:
     hibernate:
@@ -55,3 +58,9 @@ management:
         http.server.requests: true
       percentiles:
         http.server.requests: 0.5, 0.75, 0.95, 0.99
+    export:
+      prometheus:
+        enabled: true
+    enable:
+      jvm: true
+      hikaricp: true

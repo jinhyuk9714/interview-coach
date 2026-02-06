@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { motion } from 'motion/react';
 import { Card, Button, Tag, ScoreRing } from '@/components/ui';
@@ -13,7 +13,9 @@ import {
   FileText,
   Loader2,
   MessageSquare,
+  Search,
   TrendingUp,
+  X,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth';
 
@@ -30,9 +32,13 @@ interface InterviewRecord {
 
 export default function HistoryPage() {
   const [interviews, setInterviews] = useState<InterviewRecord[]>([]);
+  const [filteredInterviews, setFilteredInterviews] = useState<InterviewRecord[] | null>(null);
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user, accessToken } = useAuthStore();
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const loadInterviews = async () => {
@@ -54,19 +60,86 @@ export default function HistoryPage() {
     loadInterviews();
   }, [user, accessToken]);
 
+  const handleSearch = useCallback(async (keyword: string) => {
+    const trimmed = keyword.trim();
+    if (!trimmed) {
+      setFilteredInterviews(null);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const response = await interviewApi.search(trimmed);
+      setFilteredInterviews(response.data.interviews || []);
+    } catch (err) {
+      console.error('Search failed:', err);
+      setFilteredInterviews(null);
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
+
+  const handleSearchInputChange = useCallback((value: string) => {
+    setSearchKeyword(value);
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    if (!value.trim()) {
+      setFilteredInterviews(null);
+      return;
+    }
+
+    debounceTimerRef.current = setTimeout(() => {
+      handleSearch(value);
+    }, 300);
+  }, [handleSearch]);
+
+  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      handleSearch(searchKeyword);
+    }
+  }, [handleSearch, searchKeyword]);
+
+  const clearSearch = useCallback(() => {
+    setSearchKeyword('');
+    setFilteredInterviews(null);
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+  }, []);
+
+  // Clean up debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
+
   const getStatusLabel = (status: string) => {
     switch (status.toLowerCase()) {
       case 'completed':
         return { label: '완료', variant: 'lime' as const };
       case 'in_progress':
         return { label: '진행중', variant: 'blue' as const };
+      case 'paused':
+        return { label: '일시정지', variant: 'purple' as const };
       default:
         return { label: status, variant: 'default' as const };
     }
   };
 
-  const completedInterviews = interviews.filter(i => i.status.toLowerCase() === 'completed');
-  const inProgressInterviews = interviews.filter(i => i.status.toLowerCase() === 'in_progress');
+  const displayInterviews = filteredInterviews ?? interviews;
+  const completedInterviews = displayInterviews.filter(i => i.status.toLowerCase() === 'completed');
+  const inProgressInterviews = displayInterviews.filter(
+    i => i.status.toLowerCase() === 'in_progress' || i.status.toLowerCase() === 'paused'
+  );
 
   if (isLoading) {
     return (
@@ -109,6 +182,45 @@ export default function HistoryPage() {
           </p>
         </motion.div>
 
+        {/* Search Bar */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          className="mb-6"
+        >
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-400" />
+            <input
+              type="text"
+              value={searchKeyword}
+              onChange={(e) => handleSearchInputChange(e.target.value)}
+              onKeyDown={handleSearchKeyDown}
+              placeholder="면접 기록 검색 (키워드 입력 후 Enter)"
+              className="input-brutal w-full pl-10 pr-10"
+            />
+            {searchKeyword && (
+              <button
+                onClick={clearSearch}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
+          </div>
+          {isSearching && (
+            <div className="flex items-center gap-2 mt-2 text-sm text-neutral-500">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              검색 중...
+            </div>
+          )}
+          {filteredInterviews !== null && !isSearching && (
+            <p className="mt-2 text-sm text-neutral-500">
+              검색 결과: {filteredInterviews.length}건
+            </p>
+          )}
+        </motion.div>
+
         {/* Stats Summary */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -141,7 +253,7 @@ export default function HistoryPage() {
           </Card>
         </motion.div>
 
-        {/* In Progress Interviews */}
+        {/* In Progress & Paused Interviews */}
         {inProgressInterviews.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -154,31 +266,46 @@ export default function HistoryPage() {
               진행 중인 면접
             </h2>
             <div className="space-y-3">
-              {inProgressInterviews.map((interview) => (
-                <Link key={interview.id} href={`/interview?resume=${interview.id}`}>
-                  <Card className="p-4 hover:border-blue-500 transition-colors cursor-pointer">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-blue-100 border-2 border-blue-500 flex items-center justify-center">
-                          <MessageSquare className="w-6 h-6 text-blue-600" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <Tag variant="blue" size="sm">진행중</Tag>
-                            <span className="text-sm text-neutral-500">
-                              {interview.totalQuestions}개 질문
-                            </span>
+              {inProgressInterviews.map((interview) => {
+                const isPaused = interview.status.toLowerCase() === 'paused';
+                return (
+                  <Link
+                    key={interview.id}
+                    href={`/interview?resume=${interview.id}`}
+                  >
+                    <Card className={`p-4 transition-colors cursor-pointer ${isPaused ? 'hover:border-purple-500' : 'hover:border-blue-500'}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-12 h-12 border-2 flex items-center justify-center ${isPaused ? 'bg-purple-100 border-purple-500' : 'bg-blue-100 border-blue-500'}`}>
+                            <MessageSquare className={`w-6 h-6 ${isPaused ? 'text-purple-600' : 'text-blue-600'}`} />
                           </div>
-                          <p className="text-sm text-neutral-600">
-                            {formatDate(interview.startedAt)} {formatTime(interview.startedAt)}
-                          </p>
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              {isPaused ? (
+                                <Tag variant="purple" size="sm">일시정지</Tag>
+                              ) : (
+                                <Tag variant="blue" size="sm">진행중</Tag>
+                              )}
+                              <span className="text-sm text-neutral-500">
+                                {interview.totalQuestions}개 질문
+                              </span>
+                            </div>
+                            <p className="text-sm text-neutral-600">
+                              {formatDate(interview.startedAt)} {formatTime(interview.startedAt)}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {isPaused && (
+                            <span className="text-sm text-purple-600 font-medium">재개하기</span>
+                          )}
+                          <ChevronRight className="w-5 h-5 text-neutral-400" />
                         </div>
                       </div>
-                      <ChevronRight className="w-5 h-5 text-neutral-400" />
-                    </div>
-                  </Card>
-                </Link>
-              ))}
+                    </Card>
+                  </Link>
+                );
+              })}
             </div>
           </motion.div>
         )}
@@ -199,13 +326,19 @@ export default function HistoryPage() {
               <div className="w-16 h-16 bg-neutral-100 mx-auto mb-4 flex items-center justify-center">
                 <MessageSquare className="w-8 h-8 text-neutral-400" />
               </div>
-              <h3 className="text-lg font-semibold mb-2">아직 완료된 면접이 없습니다</h3>
+              <h3 className="text-lg font-semibold mb-2">
+                {filteredInterviews !== null ? '검색 결과가 없습니다' : '아직 완료된 면접이 없습니다'}
+              </h3>
               <p className="text-neutral-500 mb-6">
-                첫 모의 면접을 시작해보세요!
+                {filteredInterviews !== null ? '다른 키워드로 검색해보세요' : '첫 모의 면접을 시작해보세요!'}
               </p>
-              <Link href="/interview">
-                <Button>면접 시작하기</Button>
-              </Link>
+              {filteredInterviews !== null ? (
+                <Button onClick={clearSearch}>검색 초기화</Button>
+              ) : (
+                <Link href="/interview">
+                  <Button>면접 시작하기</Button>
+                </Link>
+              )}
             </Card>
           ) : (
             <div className="space-y-3">
