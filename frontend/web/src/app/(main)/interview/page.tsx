@@ -20,7 +20,11 @@ import {
   MessageSquare,
   AlertCircle,
   Loader2,
-  FileText
+  FileText,
+  Pause,
+  Timer,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import type { InterviewQna, QnaFeedback, GeneratedQuestion, JobDescription, FollowUpQuestion } from '@/types';
 
@@ -29,6 +33,11 @@ interface QuestionWithCategory {
   questionType: string;
   questionText: string;
   skillCategory: string;
+}
+
+// Extended feedback type that may include idealAnswer from LLM
+interface FeedbackWithIdealAnswer extends QnaFeedback {
+  idealAnswer?: string;
 }
 
 export default function InterviewPage() {
@@ -49,11 +58,11 @@ export default function InterviewPage() {
   } = useInterviewStore();
 
   const [answer, setAnswer] = useState('');
-  const [feedback, setFeedback] = useState<QnaFeedback | null>(null);
+  const [feedback, setFeedback] = useState<FeedbackWithIdealAnswer | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
   const [isStarted, setIsStarted] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
-  const [results, setResults] = useState<{ qna: InterviewQna; feedback: QnaFeedback; skillCategory: string }[]>([]);
+  const [results, setResults] = useState<{ qna: InterviewQna; feedback: FeedbackWithIdealAnswer; skillCategory: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [availableQuestions, setAvailableQuestions] = useState<GeneratedQuestion[]>([]);
@@ -69,6 +78,17 @@ export default function InterviewPage() {
   const [isAddingFollowUp, setIsAddingFollowUp] = useState(false);
   const [returnToQuestionIndex, setReturnToQuestionIndex] = useState<number | null>(null);
   const [originalTotalQuestions, setOriginalTotalQuestions] = useState(0);
+
+  // A-3: Timer states
+  const [timerDuration, setTimerDuration] = useState(180); // 180s (3min) or 300s (5min)
+  const [timeRemaining, setTimeRemaining] = useState(180);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // A-4: Model Answer state
+  const [showIdealAnswer, setShowIdealAnswer] = useState(false);
+
+  // A-2: Pause/Resume states
+  const [isPaused, setIsPaused] = useState(false);
 
   // Load JD list when no jdId is provided
   useEffect(() => {
@@ -104,7 +124,70 @@ export default function InterviewPage() {
     loadQuestions();
   }, [jdId, selectedJdId]);
 
+  // A-3: Timer countdown effect
+  useEffect(() => {
+    // Only run timer when interview is started, answer phase is active (not showing feedback), and not paused
+    if (isStarted && !showFeedback && !isCompleted && !isPaused) {
+      timerRef.current = setInterval(() => {
+        setTimeRemaining((prev) => {
+          if (prev <= 1) {
+            // Time's up
+            if (timerRef.current) clearInterval(timerRef.current);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    }
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [isStarted, showFeedback, isCompleted, isPaused, currentQuestionIndex]);
+
+  // A-3: Reset timer when question changes
+  useEffect(() => {
+    setTimeRemaining(timerDuration);
+  }, [currentQuestionIndex, timerDuration]);
+
   const currentQna = session?.qnaList?.[currentQuestionIndex];
+
+  // A-3: Format time as mm:ss
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // A-2: Handle pause
+  const handlePause = async () => {
+    if (!session) return;
+    try {
+      await interviewApi.pause(session.id);
+      setIsPaused(true);
+    } catch (err) {
+      console.error('Failed to pause interview:', err);
+    }
+  };
+
+  // A-2: Handle resume
+  const handleResume = async () => {
+    if (!session) return;
+    try {
+      await interviewApi.resume(session.id);
+      setIsPaused(false);
+    } catch (err) {
+      console.error('Failed to resume interview:', err);
+    }
+  };
 
   const handleStart = useCallback(async () => {
     const targetJdId = jdId ? parseInt(jdId) : selectedJdId;
@@ -149,13 +232,15 @@ export default function InterviewPage() {
       setSession(response.data);
       setOriginalTotalQuestions(response.data.totalQuestions || questions.length);
       setIsStarted(true);
+      // A-3: Reset timer on start
+      setTimeRemaining(timerDuration);
     } catch (err) {
       console.error('Failed to start interview:', err);
       setError('면접 시작에 실패했습니다. 다시 시도해주세요.');
     } finally {
       setIsLoading(false);
     }
-  }, [jdId, selectedJdId, availableQuestions, setSession]);
+  }, [jdId, selectedJdId, availableQuestions, setSession, setCurrentQuestionIndex, timerDuration]);
 
   const handleSubmitAnswer = async () => {
     if (!answer.trim() || !currentQna || !session) return;
@@ -165,6 +250,8 @@ export default function InterviewPage() {
     setStreamingFeedback('');
     setIsStreaming(true);
     setError(null);
+    // A-4: Reset ideal answer toggle on new submission
+    setShowIdealAnswer(false);
 
     try {
       // Submit the answer
@@ -174,7 +261,7 @@ export default function InterviewPage() {
       });
 
       // Use POST for streaming feedback (supports long answers without URL length limits)
-      let feedbackData: QnaFeedback | null = null;
+      let feedbackData: FeedbackWithIdealAnswer | null = null;
       const questionSkillCategory = questionsWithCategoryRef.current[currentQuestionIndex]?.skillCategory || currentQna.questionType || 'general';
 
       await feedbackApi.streamPost(
@@ -195,6 +282,7 @@ export default function InterviewPage() {
             tips: Array.isArray(data.tips) ? data.tips as string[] : (data.tips ? [data.tips as string] : []),
             followUpQuestion: followUp,
             hasFollowUp: (data.hasFollowUp as boolean) || false,
+            idealAnswer: (data.idealAnswer as string) || undefined,
           };
           // Capture follow-up question for UI
           if (followUp && data.hasFollowUp) {
@@ -296,6 +384,7 @@ export default function InterviewPage() {
         setShowFeedback(false);
         setStreamingFeedback('');
         setFollowUpQuestion(null);
+        setShowIdealAnswer(false);
         return;
       }
     }
@@ -311,6 +400,7 @@ export default function InterviewPage() {
       setFollowUpQuestion(null);
       setCurrentFollowUpDepth(0);
       setReturnToQuestionIndex(null);
+      setShowIdealAnswer(false);
     } else {
       // Complete the interview (statistics already recorded per question)
       if (session) {
@@ -360,6 +450,7 @@ export default function InterviewPage() {
       setShowFeedback(false);
       setStreamingFeedback('');
       setFollowUpQuestion(null);
+      setShowIdealAnswer(false);
     } catch (err) {
       console.error('Failed to add follow-up question:', err);
       setError('꼬리 질문 추가에 실패했습니다.');
@@ -385,6 +476,12 @@ export default function InterviewPage() {
     setCurrentFollowUpDepth(0);
     setReturnToQuestionIndex(null);
     setOriginalTotalQuestions(0);
+    // A-3: Reset timer states
+    setTimeRemaining(timerDuration);
+    // A-4: Reset ideal answer
+    setShowIdealAnswer(false);
+    // A-2: Reset pause state
+    setIsPaused(false);
   };
 
   // Start screen
@@ -447,6 +544,38 @@ export default function InterviewPage() {
                       : '-'}
                   </div>
                   <div className="text-xs text-neutral-500 uppercase">난이도</div>
+                </div>
+              </div>
+
+              {/* A-3: Timer Duration Selector */}
+              <div className="mb-8 max-w-lg mx-auto">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-neutral-500 mb-4 flex items-center gap-2 justify-center">
+                  <Timer className="w-4 h-4" />
+                  답변 시간 설정
+                </h3>
+                <div className="flex gap-4 justify-center">
+                  <button
+                    onClick={() => setTimerDuration(180)}
+                    className={`px-6 py-3 border-2 font-semibold transition-all ${
+                      timerDuration === 180
+                        ? 'border-ink bg-accent-lime shadow-[4px_4px_0_0_black]'
+                        : 'border-neutral-200 hover:border-neutral-400 bg-white'
+                    }`}
+                  >
+                    <div className="text-lg font-display">3분</div>
+                    <div className="text-xs text-neutral-500">180초</div>
+                  </button>
+                  <button
+                    onClick={() => setTimerDuration(300)}
+                    className={`px-6 py-3 border-2 font-semibold transition-all ${
+                      timerDuration === 300
+                        ? 'border-ink bg-accent-lime shadow-[4px_4px_0_0_black]'
+                        : 'border-neutral-200 hover:border-neutral-400 bg-white'
+                    }`}
+                  >
+                    <div className="text-lg font-display">5분</div>
+                    <div className="text-xs text-neutral-500">300초</div>
+                  </button>
                 </div>
               </div>
 
@@ -624,6 +753,40 @@ export default function InterviewPage() {
   return (
     <div className="py-8">
       <div className="max-w-4xl mx-auto px-4">
+        {/* A-2: Paused Overlay */}
+        {isPaused && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center"
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', bounce: 0.4 }}
+            >
+              <Card className="p-12 text-center max-w-md mx-4">
+                <div className="w-20 h-20 bg-accent-coral border-2 border-ink flex items-center justify-center mx-auto mb-6">
+                  <Pause className="w-10 h-10 text-white" />
+                </div>
+                <h2 className="text-display-sm font-display mb-2">일시 정지</h2>
+                <p className="text-neutral-600 mb-8">
+                  면접이 일시 정지되었습니다.
+                  <br />
+                  준비가 되면 재개 버튼을 눌러주세요.
+                </p>
+                <Button
+                  size="lg"
+                  onClick={handleResume}
+                  leftIcon={<Play className="w-5 h-5" />}
+                >
+                  면접 재개하기
+                </Button>
+              </Card>
+            </motion.div>
+          </motion.div>
+        )}
+
         {/* Progress Header */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
@@ -641,6 +804,14 @@ export default function InterviewPage() {
               </div>
             </div>
             <div className="flex items-center gap-4">
+              {/* A-2: Pause Button */}
+              <button
+                onClick={handlePause}
+                className="w-8 h-8 border-2 border-ink bg-white hover:bg-neutral-100 flex items-center justify-center transition-colors"
+                title="일시 정지"
+              >
+                <Pause className="w-4 h-4" />
+              </button>
               <span className="text-sm font-mono text-neutral-500">
                 질문 {currentQuestionIndex + 1} / {session?.totalQuestions}
               </span>
@@ -698,12 +869,40 @@ export default function InterviewPage() {
             transition={{ delay: 0.2 }}
           >
             <Card className="p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <MessageSquare className="w-4 h-4 text-neutral-400" />
-                <span className="text-sm font-sans font-semibold uppercase tracking-wider text-neutral-500">
-                  나의 답변
-                </span>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-neutral-400" />
+                  <span className="text-sm font-sans font-semibold uppercase tracking-wider text-neutral-500">
+                    나의 답변
+                  </span>
+                </div>
+
+                {/* A-3: Timer Display */}
+                <div className={`flex items-center gap-2 px-3 py-1.5 border-2 font-mono text-sm ${
+                  timeRemaining <= 30
+                    ? 'border-accent-coral bg-accent-coral/10 text-accent-coral animate-pulse'
+                    : timeRemaining <= 60
+                    ? 'border-orange-400 bg-orange-50 text-orange-600'
+                    : 'border-neutral-300 bg-white text-neutral-600'
+                }`}>
+                  <Timer className="w-4 h-4" />
+                  <span className="font-semibold">{formatTime(timeRemaining)}</span>
+                </div>
               </div>
+
+              {/* A-3: Time's up warning */}
+              {timeRemaining === 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-4 p-3 bg-accent-coral/10 border-2 border-accent-coral flex items-center gap-3"
+                >
+                  <AlertCircle className="w-5 h-5 text-accent-coral shrink-0" />
+                  <p className="text-sm text-accent-coral font-semibold">
+                    시간이 초과되었습니다. 답변을 제출해주세요.
+                  </p>
+                </motion.div>
+              )}
 
               <Textarea
                 ref={textareaRef}
@@ -785,6 +984,39 @@ export default function InterviewPage() {
                       ))}
                     </ul>
                   </div>
+
+                  {/* A-4: Model Answer Toggle */}
+                  {feedback.idealAnswer && (
+                    <div>
+                      <button
+                        onClick={() => setShowIdealAnswer(!showIdealAnswer)}
+                        className="flex items-center gap-2 px-4 py-2 border-2 border-ink bg-accent-blue/10 hover:bg-accent-blue/20 transition-colors font-semibold text-sm"
+                      >
+                        {showIdealAnswer ? (
+                          <EyeOff className="w-4 h-4" />
+                        ) : (
+                          <Eye className="w-4 h-4" />
+                        )}
+                        모범 답안 보기
+                      </button>
+                      {showIdealAnswer && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="mt-3 p-4 bg-accent-blue/5 border-2 border-accent-blue"
+                        >
+                          <h4 className="font-semibold text-accent-blue flex items-center gap-2 mb-3">
+                            <Lightbulb className="w-4 h-4" />
+                            모범 답안
+                          </h4>
+                          <div className="text-sm text-neutral-700 whitespace-pre-wrap leading-relaxed">
+                            {feedback.idealAnswer}
+                          </div>
+                        </motion.div>
+                      )}
+                    </div>
+                  )}
                 </motion.div>
               )}
 
@@ -822,6 +1054,7 @@ export default function InterviewPage() {
                       setShowFeedback(false);
                       setAnswer('');
                       setFollowUpQuestion(null);
+                      setShowIdealAnswer(false);
                     }}
                     leftIcon={<RotateCcw className="w-4 h-4" />}
                   >

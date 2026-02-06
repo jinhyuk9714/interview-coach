@@ -4,6 +4,8 @@ services:
   # ============================================
 
   # PostgreSQL Database
+  # [B-8] PostgreSQL max_connections 조정
+  # 5개 서비스 × 차등 풀 = 10+15+15+20+0(gateway) = 60 커넥션 + 여유분
   postgres:
     image: postgres:16-alpine
     container_name: interview-coach-db
@@ -16,6 +18,15 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    command: >
+      postgres
+      -c max_connections=100
+      -c shared_buffers=256MB
+      -c effective_cache_size=512MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=64MB
+      -c log_min_duration_statement=1000
+      -c shared_preload_libraries=pg_stat_statements
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s

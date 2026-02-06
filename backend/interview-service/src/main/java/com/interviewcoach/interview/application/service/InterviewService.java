@@ -63,17 +63,13 @@ public class InterviewService {
 
     @Transactional(readOnly = true)
     public InterviewListResponse getInterviews(Long userId) {
-        // [N+1 발생] 세션 목록 조회 후 각 세션의 qnaList 접근 시 추가 쿼리 발생
-        // 5주차에 Fetch Join으로 최적화 예정
-        List<InterviewSession> sessions = sessionRepository.findByUserIdOrderByStartedAtDesc(userId);
+        // [B-1] Fetch Join으로 N+1 문제 해결
+        // Before: findByUserIdOrderByStartedAtDesc → 세션 N개마다 qnaList 추가 쿼리 (11 queries for 10 sessions)
+        // After: findByUserIdWithQnaOrderByStartedAtDesc → 단일 쿼리 (1 query)
+        List<InterviewSession> sessions = sessionRepository.findByUserIdWithQnaOrderByStartedAtDesc(userId);
 
         List<InterviewSessionResponse> responses = sessions.stream()
-                .map(session -> {
-                    // N+1: 각 세션마다 qnaList 조회 쿼리 발생!
-                    int qnaCount = session.getQnaList().size();
-                    log.debug("Session {} has {} QnAs", session.getId(), qnaCount);
-                    return InterviewSessionResponse.fromWithQna(session);
-                })
+                .map(InterviewSessionResponse::fromWithQna)
                 .toList();
 
         return InterviewListResponse.builder()
@@ -84,9 +80,25 @@ public class InterviewService {
 
     @Transactional(readOnly = true)
     public InterviewSessionResponse getInterview(Long sessionId) {
-        InterviewSession session = sessionRepository.findById(sessionId)
+        // [B-1] 단일 세션 조회도 Fetch Join 적용
+        InterviewSession session = sessionRepository.findByIdWithQna(sessionId)
                 .orElseThrow(() -> new InterviewNotFoundException(sessionId));
         return InterviewSessionResponse.fromWithQna(session);
+    }
+
+    // [A-1] 면접 기록 검색
+    @Transactional(readOnly = true)
+    public InterviewListResponse searchInterviews(Long userId, String keyword) {
+        List<InterviewSession> sessions = sessionRepository.searchByKeyword(userId, keyword);
+
+        List<InterviewSessionResponse> responses = sessions.stream()
+                .map(InterviewSessionResponse::fromWithQna)
+                .toList();
+
+        return InterviewListResponse.builder()
+                .totalCount(responses.size())
+                .interviews(responses)
+                .build();
     }
 
     @Transactional
@@ -94,7 +106,7 @@ public class InterviewService {
         InterviewSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new InterviewNotFoundException(sessionId));
 
-        if (!session.isInProgress()) {
+        if (!session.canAnswer()) {
             throw new InterviewAlreadyCompletedException(sessionId);
         }
 
@@ -126,7 +138,7 @@ public class InterviewService {
         InterviewSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new InterviewNotFoundException(sessionId));
 
-        if (!session.isInProgress()) {
+        if (!session.isInProgress() && !session.isPaused()) {
             throw new InterviewAlreadyCompletedException(sessionId);
         }
 
@@ -135,9 +147,41 @@ public class InterviewService {
         BigDecimal avgScore = calculateAvgScore(qnaList);
 
         session.complete(avgScore);
-        sessionRepository.save(session);  // 명시적 저장
+        sessionRepository.save(session);
 
         log.info("Completed interview: sessionId={}, avgScore={}", sessionId, avgScore);
+
+        return InterviewSessionResponse.fromWithQna(session);
+    }
+
+    // [A-2] 면접 일시정지
+    @Transactional
+    public InterviewSessionResponse pauseInterview(Long sessionId) {
+        InterviewSession session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new InterviewNotFoundException(sessionId));
+
+        if (!session.isInProgress()) {
+            throw new InterviewAlreadyCompletedException(sessionId);
+        }
+
+        session.pause();
+        log.info("Paused interview: sessionId={}", sessionId);
+
+        return InterviewSessionResponse.fromWithQna(session);
+    }
+
+    // [A-2] 면접 재개
+    @Transactional
+    public InterviewSessionResponse resumeInterview(Long sessionId) {
+        InterviewSession session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new InterviewNotFoundException(sessionId));
+
+        if (!session.isPaused()) {
+            throw new IllegalStateException("면접이 일시정지 상태가 아닙니다. sessionId=" + sessionId);
+        }
+
+        session.resume();
+        log.info("Resumed interview: sessionId={}", sessionId);
 
         return InterviewSessionResponse.fromWithQna(session);
     }
@@ -147,7 +191,7 @@ public class InterviewService {
         InterviewSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new InterviewNotFoundException(sessionId));
 
-        if (!session.isInProgress()) {
+        if (!session.canAnswer()) {
             throw new InterviewAlreadyCompletedException(sessionId);
         }
 

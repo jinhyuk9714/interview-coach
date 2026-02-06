@@ -34,6 +34,15 @@ public class InterviewController {
         return ResponseEntity.ok(response);
     }
 
+    // [A-1] 면접 기록 검색
+    @GetMapping("/search")
+    public ResponseEntity<InterviewListResponse> searchInterviews(
+            @RequestHeader("X-User-Id") Long userId,
+            @RequestParam String keyword) {
+        InterviewListResponse response = interviewService.searchInterviews(userId, keyword);
+        return ResponseEntity.ok(response);
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<InterviewSessionResponse> getInterview(@PathVariable Long id) {
         InterviewSessionResponse response = interviewService.getInterview(id);
@@ -51,6 +60,20 @@ public class InterviewController {
     @PostMapping("/{id}/complete")
     public ResponseEntity<InterviewSessionResponse> completeInterview(@PathVariable Long id) {
         InterviewSessionResponse response = interviewService.completeInterview(id);
+        return ResponseEntity.ok(response);
+    }
+
+    // [A-2] 면접 일시정지
+    @PatchMapping("/{id}/pause")
+    public ResponseEntity<InterviewSessionResponse> pauseInterview(@PathVariable Long id) {
+        InterviewSessionResponse response = interviewService.pauseInterview(id);
+        return ResponseEntity.ok(response);
+    }
+
+    // [A-2] 면접 재개
+    @PatchMapping("/{id}/resume")
+    public ResponseEntity<InterviewSessionResponse> resumeInterview(@PathVariable Long id) {
+        InterviewSessionResponse response = interviewService.resumeInterview(id);
         return ResponseEntity.ok(response);
     }
 
