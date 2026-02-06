@@ -20,15 +20,15 @@
 
 | 대시보드 | JD 분석 |
 |:---:|:---:|
-| ![대시보드](docs/screenshots/대시보드.png) | ![JD 분석 결과](docs/screenshots/JD%20분석%20결과.png) |
+| [![대시보드](docs/screenshots/대시보드.png)](docs/screenshots/대시보드.png) | [![JD 분석 결과](docs/screenshots/JD%20분석%20결과.png)](docs/screenshots/JD%20분석%20결과.png) |
 
 | 면접 진행 | AI 피드백 |
 |:---:|:---:|
-| ![면접 진행 중](docs/screenshots/면접%20진행%20중.png) | ![피드백 화면](docs/screenshots/피드백%20화면.png) |
+| [![면접 진행 중](docs/screenshots/면접%20진행%20중.png)](docs/screenshots/면접%20진행%20중.png) | [![피드백 화면](docs/screenshots/피드백%20화면.png)](docs/screenshots/피드백%20화면.png) |
 
 | 면접 결과 리포트 | 학습 통계 |
 |:---:|:---:|
-| ![면접 결과 리포트](docs/screenshots/면접%20결과%20리포트.png) | ![통계 페이지](docs/screenshots/통계%20페이지.png) |
+| [![면접 결과 리포트](docs/screenshots/면접%20결과%20리포트.png)](docs/screenshots/면접%20결과%20리포트.png) | [![통계 페이지](docs/screenshots/통계%20페이지.png)](docs/screenshots/통계%20페이지.png) |
 
 ## 아키텍처
 
