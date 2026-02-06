@@ -18,35 +18,11 @@
 
 ## 스크린샷
 
-<details>
-<summary><b>대시보드</b> (클릭하여 확대)</summary>
-<img src="docs/screenshots/대시보드.png" alt="대시보드">
-</details>
-
-<details>
-<summary><b>JD 분석</b> (클릭하여 확대)</summary>
-<img src="docs/screenshots/JD 분석 결과.png" alt="JD 분석 결과">
-</details>
-
-<details>
-<summary><b>면접 진행</b> (클릭하여 확대)</summary>
-<img src="docs/screenshots/면접 진행 중.png" alt="면접 진행 중">
-</details>
-
-<details>
-<summary><b>AI 피드백</b> (클릭하여 확대)</summary>
-<img src="docs/screenshots/피드백 화면.png" alt="피드백 화면">
-</details>
-
-<details>
-<summary><b>면접 결과 리포트</b> (클릭하여 확대)</summary>
-<img src="docs/screenshots/면접 결과 리포트.png" alt="면접 결과 리포트">
-</details>
-
-<details>
-<summary><b>학습 통계</b> (클릭하여 확대)</summary>
-<img src="docs/screenshots/통계 페이지.png" alt="통계 페이지">
-</details>
+| 대시보드 | JD 분석 | 면접 진행 |
+|:---:|:---:|:---:|
+| <a href="docs/screenshots/대시보드.png"><img src="docs/screenshots/대시보드.png" width="280" alt="대시보드"></a> | <a href="docs/screenshots/JD 분석 결과.png"><img src="docs/screenshots/JD 분석 결과.png" width="280" alt="JD 분석 결과"></a> | <a href="docs/screenshots/면접 진행 중.png"><img src="docs/screenshots/면접 진행 중.png" width="280" alt="면접 진행 중"></a> |
+| **AI 피드백** | **면접 결과 리포트** | **학습 통계** |
+| <a href="docs/screenshots/피드백 화면.png"><img src="docs/screenshots/피드백 화면.png" width="280" alt="AI 피드백"></a> | <a href="docs/screenshots/면접 결과 리포트.png"><img src="docs/screenshots/면접 결과 리포트.png" width="280" alt="면접 결과 리포트"></a> | <a href="docs/screenshots/통계 페이지.png"><img src="docs/screenshots/통계 페이지.png" width="280" alt="학습 통계"></a> |
 
 ## 아키텍처
 
