@@ -20,6 +20,14 @@ AI Interview Coach는 채용공고(JD)를 분석해 예상 질문을 만들고, 
 | 학습 통계 | 카테고리별 정답률, 취약 분야, 일일 활동 기록 |
 | 취약 분야 반영 | 낮은 정답률 카테고리를 질문 생성에 우선 반영 |
 
+## 스크린샷
+
+| 대시보드 | JD 분석 | 면접 진행 |
+| :---: | :---: | :---: |
+| <a href="docs/screenshots/대시보드.png"><img src="docs/screenshots/대시보드.png" width="280" alt="대시보드"></a> | <a href="docs/screenshots/JD 분석 결과.png"><img src="docs/screenshots/JD 분석 결과.png" width="280" alt="JD 분석 결과"></a> | <a href="docs/screenshots/면접 진행 중.png"><img src="docs/screenshots/면접 진행 중.png" width="280" alt="면접 진행 중"></a> |
+| **AI 피드백** | **면접 결과 리포트** | **학습 통계** |
+| <a href="docs/screenshots/피드백 화면.png"><img src="docs/screenshots/피드백 화면.png" width="280" alt="AI 피드백"></a> | <a href="docs/screenshots/면접 결과 리포트.png"><img src="docs/screenshots/면접 결과 리포트.png" width="280" alt="면접 결과 리포트"></a> | <a href="docs/screenshots/통계 페이지.png"><img src="docs/screenshots/통계 페이지.png" width="280" alt="학습 통계"></a> |
+
 ## 아키텍처
 
 ```mermaid
